@@ -9,11 +9,22 @@ namespace DbMetaTool.Commands
     {
         public static void Execute(string databaseDirectory, string scriptsDirectory)
         {
-            Directory.CreateDirectory(databaseDirectory);
+            var fullDatabaseDirectory = databaseDirectory;
+            if (!databaseDirectory.Contains(Path.DirectorySeparatorChar) && 
+                !databaseDirectory.Contains('/') && 
+                !databaseDirectory.Contains('\\') &&
+                !Path.IsPathRooted(databaseDirectory))
+            {
+                fullDatabaseDirectory = Path.Combine("compose", "data", databaseDirectory);
+            }
+            
+            Directory.CreateDirectory(fullDatabaseDirectory);
 
-            var databaseFileName = "database.fdb";
-            var localDatabasePath = Path.GetFullPath(Path.Combine(databaseDirectory, databaseFileName));
-            var dockerDatabasePath = "/var/lib/firebird/data/" + databaseFileName;
+            var directoryName = new DirectoryInfo(Path.GetFullPath(fullDatabaseDirectory)).Name;
+            var databaseFileName = $"{directoryName}.fdb";
+            
+            var dockerDatabasePath = $"/var/lib/firebird/data/{directoryName}/{databaseFileName}";
+            var localDatabasePath = Path.Combine(fullDatabaseDirectory, databaseFileName);
 
             Console.WriteLine("Tworzenie bazy danych...");
             Console.WriteLine($"  Lokalna ścieżka: {localDatabasePath}");
