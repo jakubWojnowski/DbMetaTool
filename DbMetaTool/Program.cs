@@ -1,7 +1,4 @@
-﻿using System;
-using System.IO;
-using DbMetaTool.Commands;
-using DbMetaTool.Commands.BuildDatabase;
+﻿using DbMetaTool.Commands.BuildDatabase;
 using DbMetaTool.Commands.ExportMetadata;
 using DbMetaTool.Commands.UpdateDatabase;
 

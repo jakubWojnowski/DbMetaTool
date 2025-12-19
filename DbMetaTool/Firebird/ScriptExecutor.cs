@@ -35,7 +35,7 @@ public class ScriptExecutor(FirebirdConnectionFactory connectionFactory)
         try
         {
             var scriptContent = File.ReadAllText(scriptPath);
-            var statements = SplitScriptIntoStatements(scriptContent);
+            var statements = SqlScriptParser.SplitScriptIntoStatements(scriptContent);
 
             using var connection = connectionFactory.CreateAndOpenConnection();
 
@@ -81,86 +81,6 @@ public class ScriptExecutor(FirebirdConnectionFactory connectionFactory)
         return Directory.GetFiles(path, "*.sql", SearchOption.TopDirectoryOnly)
             .OrderBy(f => f)
             .ToList();
-    }
-
-    private static List<string> SplitScriptIntoStatements(string scriptContent)
-    {
-        var statements = new List<string>();
-        var lines = scriptContent.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
-        var currentStatement = new List<string>();
-        var terminator = ";";
-        var isProcedure = false;
-
-        foreach (var line in lines)
-        {
-            var trimmedLine = line.Trim();
-
-            if (string.IsNullOrWhiteSpace(trimmedLine))
-            {
-                if (currentStatement.Count > 0)
-                {
-                    currentStatement.Add(line);
-                }
-                continue;
-            }
-
-            if (trimmedLine.StartsWith("CREATE PROCEDURE", StringComparison.OrdinalIgnoreCase) ||
-                trimmedLine.StartsWith("CREATE OR ALTER PROCEDURE", StringComparison.OrdinalIgnoreCase))
-            {
-                isProcedure = true;
-                terminator = "^";
-            }
-
-            if (trimmedLine == "^")
-            {
-                if (currentStatement.Count > 0)
-                {
-                    var statement = string.Join(Environment.NewLine, currentStatement).Trim();
-                    if (!string.IsNullOrWhiteSpace(statement))
-                    {
-                        statements.Add(statement);
-                    }
-                    currentStatement.Clear();
-                }
-                isProcedure = false;
-                terminator = ";";
-                continue;
-            }
-
-            if (isProcedure)
-            {
-                currentStatement.Add(line);
-            }
-            else if (trimmedLine.EndsWith(";"))
-            {
-                currentStatement.Add(line.TrimEnd(';'));
-                var statement = string.Join(Environment.NewLine, currentStatement).Trim();
-                if (!string.IsNullOrWhiteSpace(statement))
-                {
-                    statements.Add(statement + ";");
-                }
-                currentStatement.Clear();
-            }
-            else
-            {
-                currentStatement.Add(line);
-            }
-        }
-
-        if (currentStatement.Count > 0)
-        {
-            var statement = string.Join(Environment.NewLine, currentStatement).Trim();
-            if (!string.IsNullOrWhiteSpace(statement))
-            {
-                if (!statement.EndsWith(";") && terminator == ";")
-                {
-                    statement += ";";
-                }
-                statements.Add(statement);
-            }
-        }
-
-        return statements;
     }
 }
 
