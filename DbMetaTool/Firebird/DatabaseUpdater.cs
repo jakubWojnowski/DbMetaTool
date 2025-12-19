@@ -94,9 +94,9 @@ public class DatabaseUpdater
             {
                 var existingTable = existingTableDict[tableName];
                 var scriptContent = File.ReadAllText(scriptFile);
-                var scriptColumns = ParseColumnsFromCreateTableScript(scriptContent);
+                var scriptColumnDefinitions = ParseColumnDefinitionsFromCreateTableScript(scriptContent);
 
-                CompareAndUpdateTableColumns(tableName, existingTable, scriptColumns, report);
+                CompareAndUpdateTableColumns(tableName, existingTable, scriptColumnDefinitions, report);
             }
         }
     }
@@ -104,20 +104,52 @@ public class DatabaseUpdater
     private void CompareAndUpdateTableColumns(
         string tableName,
         TableMetadata existingTable,
-        List<string> scriptColumnNames,
+        List<ColumnDefinition> scriptColumnDefinitions,
         UpdateReport report)
     {
         var existingColumnNames = existingTable.Columns.Select(c => c.Name).ToHashSet();
 
-        foreach (var scriptColumnName in scriptColumnNames)
+        foreach (var scriptColumn in scriptColumnDefinitions)
         {
-            if (!existingColumnNames.Contains(scriptColumnName))
+            if (!existingColumnNames.Contains(scriptColumn.Name))
             {
-                report.ManualReviewRequired.Add(
-                    $"Tabela {tableName}: brakuje kolumny {scriptColumnName}. Wymagana ręczna weryfikacja i ALTER TABLE."
-                );
+                try
+                {
+                    // Automatycznie dodaj brakującą kolumnę
+                    var alterTableSql = BuildAlterTableAddColumnSql(tableName, scriptColumn);
+                    
+                    using var connection = _connectionFactory.CreateAndOpenConnection();
+                    using var command = connection.CreateCommand();
+                    command.CommandText = alterTableSql;
+                    command.ExecuteNonQuery();
+
+                    report.AddedColumns.Add($"{tableName}.{scriptColumn.Name}");
+                }
+                catch (Exception ex)
+                {
+                    report.Errors.Add($"Błąd podczas dodawania kolumny {scriptColumn.Name} do tabeli {tableName}: {ex.Message}");
+                }
             }
         }
+    }
+
+    private static string BuildAlterTableAddColumnSql(string tableName, ColumnDefinition column)
+    {
+        var sql = $"ALTER TABLE {tableName} ADD {column.Name} {column.DataType}";
+        
+        if (!column.IsNullable)
+        {
+            sql += " NOT NULL";
+        }
+        
+        if (!string.IsNullOrEmpty(column.DefaultValue))
+        {
+            sql += $" DEFAULT {column.DefaultValue}";
+        }
+        
+        sql += ";";
+        
+        return sql;
     }
 
     private void UpdateProcedures(string scriptsDirectory, UpdateReport report)
@@ -275,10 +307,10 @@ public class DatabaseUpdater
         return statements;
     }
 
-    private static List<string> ParseColumnsFromCreateTableScript(string scriptContent)
+    private static List<ColumnDefinition> ParseColumnDefinitionsFromCreateTableScript(string scriptContent)
     {
-        var columns = new List<string>();
-        var lines = scriptContent.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+        var columns = new List<ColumnDefinition>();
+        var lines = scriptContent.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
         var inTableDefinition = false;
 
         foreach (var line in lines)
@@ -301,26 +333,96 @@ public class DatabaseUpdater
                 break;
             }
 
-            if (inTableDefinition)
+            if (inTableDefinition && !string.IsNullOrWhiteSpace(trimmedLine))
             {
-                var columnLine = trimmedLine.TrimEnd(',');
-                var parts = columnLine.Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries);
-
-                if (parts.Length > 0)
+                var columnDef = ParseColumnDefinition(trimmedLine.TrimEnd(','));
+                if (columnDef != null)
                 {
-                    columns.Add(parts[0]);
+                    columns.Add(columnDef);
                 }
             }
         }
 
         return columns;
     }
+
+    private static ColumnDefinition? ParseColumnDefinition(string columnLine)
+    {
+        // Przykład: "ID INTEGER NOT NULL" lub "NAME VARCHAR(255)" lub "EMAIL D_EMAIL" lub "CREATED_AT D_TIMESTAMP"
+        // Format: NAME TYPE [NOT NULL] [DEFAULT value]
+        
+        var trimmed = columnLine.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return null;
+        }
+
+        // Znajdź pierwszą spację - to jest koniec nazwy kolumny
+        var firstSpaceIndex = trimmed.IndexOf(' ');
+        if (firstSpaceIndex <= 0)
+        {
+            return null;
+        }
+
+        var name = trimmed.Substring(0, firstSpaceIndex).Trim();
+        var rest = trimmed.Substring(firstSpaceIndex).Trim();
+
+        // Sprawdź czy jest NOT NULL
+        var isNullable = true;
+        if (rest.Contains("NOT NULL", StringComparison.OrdinalIgnoreCase))
+        {
+            isNullable = false;
+            rest = rest.Replace("NOT NULL", "", StringComparison.OrdinalIgnoreCase).Trim();
+        }
+        else if (rest.EndsWith("NOT NULL", StringComparison.OrdinalIgnoreCase))
+        {
+            isNullable = false;
+            rest = rest.Substring(0, rest.Length - 8).Trim();
+        }
+
+        // Sprawdź czy jest DEFAULT
+        string? defaultValue = null;
+        var defaultIndex = rest.IndexOf("DEFAULT", StringComparison.OrdinalIgnoreCase);
+        if (defaultIndex >= 0)
+        {
+            var defaultPart = rest.Substring(defaultIndex + 7).Trim();
+            // Pobierz wartość DEFAULT (może być po spacji)
+            var defaultValueEnd = defaultPart.IndexOf(' ');
+            if (defaultValueEnd > 0)
+            {
+                defaultValue = defaultPart.Substring(0, defaultValueEnd).Trim();
+            }
+            else
+            {
+                defaultValue = defaultPart.Trim();
+            }
+            rest = rest.Substring(0, defaultIndex).Trim();
+        }
+
+        // Reszta to typ danych (może zawierać nawiasy, np. VARCHAR(255) lub domenę D_EMAIL)
+        var dataType = rest.Trim();
+
+        return new ColumnDefinition(
+            Name: name,
+            DataType: dataType,
+            IsNullable: isNullable,
+            DefaultValue: defaultValue
+        );
+    }
 }
+
+public record ColumnDefinition(
+    string Name,
+    string DataType,
+    bool IsNullable,
+    string? DefaultValue
+);
 
 public class UpdateReport
 {
     public List<string> AddedDomains { get; } = new List<string>();
     public List<string> AddedTables { get; } = new List<string>();
+    public List<string> AddedColumns { get; } = new List<string>();
     public List<string> UpdatedProcedures { get; } = new List<string>();
     public List<string> ManualReviewRequired { get; } = new List<string>();
     public List<string> Errors { get; } = new List<string>();
@@ -329,6 +431,7 @@ public class UpdateReport
     {
         return AddedDomains.Count > 0 ||
                AddedTables.Count > 0 ||
+               AddedColumns.Count > 0 ||
                UpdatedProcedures.Count > 0;
     }
 
@@ -359,6 +462,16 @@ public class UpdateReport
             foreach (var table in AddedTables)
             {
                 Console.WriteLine($"  + {table}");
+            }
+            Console.WriteLine();
+        }
+
+        if (AddedColumns.Count > 0)
+        {
+            Console.WriteLine("Dodane kolumny:");
+            foreach (var column in AddedColumns)
+            {
+                Console.WriteLine($"  + {column}");
             }
             Console.WriteLine();
         }
