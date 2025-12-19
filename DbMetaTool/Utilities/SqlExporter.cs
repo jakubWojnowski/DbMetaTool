@@ -1,6 +1,6 @@
 using DbMetaTool.Models;
 
-namespace DbMetaTool.Exporters;
+namespace DbMetaTool.Utilities;
 
 public class SqlExporter
 {

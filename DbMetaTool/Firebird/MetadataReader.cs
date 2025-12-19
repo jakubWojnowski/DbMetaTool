@@ -3,20 +3,13 @@ using DbMetaTool.Models;
 
 namespace DbMetaTool.Firebird;
 
-public class MetadataReader
+public class MetadataReader(FirebirdConnectionFactory connectionFactory)
 {
-    private readonly FirebirdConnectionFactory _connectionFactory;
-
-    public MetadataReader(FirebirdConnectionFactory connectionFactory)
-    {
-        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
-    }
-
     public List<DomainMetadata> GetDomains()
     {
         var domains = new List<DomainMetadata>();
 
-        using var connection = _connectionFactory.CreateAndOpenConnection();
+        using var connection = connectionFactory.CreateAndOpenConnection();
         using var command = connection.CreateCommand();
 
         command.CommandText = @"
@@ -68,7 +61,7 @@ public class MetadataReader
     {
         var tables = new List<TableMetadata>();
 
-        using var connection = _connectionFactory.CreateAndOpenConnection();
+        using var connection = connectionFactory.CreateAndOpenConnection();
         using var command = connection.CreateCommand();
 
         command.CommandText = @"
@@ -97,7 +90,7 @@ public class MetadataReader
     {
         var columns = new List<ColumnMetadata>();
 
-        using var connection = _connectionFactory.CreateAndOpenConnection();
+        using var connection = connectionFactory.CreateAndOpenConnection();
         using var command = connection.CreateCommand();
 
         command.CommandText = @"
@@ -155,7 +148,7 @@ public class MetadataReader
     {
         var procedures = new List<ProcedureMetadata>();
 
-        using var connection = _connectionFactory.CreateAndOpenConnection();
+        using var connection = connectionFactory.CreateAndOpenConnection();
         using var command = connection.CreateCommand();
 
         command.CommandText = @"
@@ -179,22 +172,6 @@ public class MetadataReader
         }
 
         return procedures;
-    }
-
-    public string GetProcedureSource(string procedureName)
-    {
-        using var connection = _connectionFactory.CreateAndOpenConnection();
-        using var command = connection.CreateCommand();
-
-        command.CommandText = @"
-            SELECT p.RDB$PROCEDURE_SOURCE
-            FROM RDB$PROCEDURES p
-            WHERE p.RDB$PROCEDURE_NAME = @ProcName";
-
-        command.Parameters.AddWithValue("@ProcName", procedureName);
-
-        var result = command.ExecuteScalar();
-        return result?.ToString() ?? string.Empty;
     }
 
     private static string MapFirebirdTypeToSql(int firebirdType, int? length, int? precision, int? scale)

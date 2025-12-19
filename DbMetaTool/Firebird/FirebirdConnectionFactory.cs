@@ -11,22 +11,9 @@ public class FirebirdConnectionFactory
         _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
     }
 
-    public FbConnection CreateConnection()
-    {
-        var connection = new FbConnection(_connectionString);
-        return connection;
-    }
-
-    public async Task<FbConnection> CreateAndOpenConnectionAsync()
-    {
-        var connection = CreateConnection();
-        await connection.OpenAsync();
-        return connection;
-    }
-
     public FbConnection CreateAndOpenConnection()
     {
-        var connection = CreateConnection();
+        var connection = new FbConnection(_connectionString);
         connection.Open();
         return connection;
     }
@@ -52,52 +39,9 @@ public class FirebirdConnectionFactory
         return builder.ConnectionString;
     }
 
-    public static string BuildConnectionStringForDocker(
-        string databasePath,
-        string userId = "SYSDBA",
-        string password = "masterkey")
+    public static void CreateDatabase(string connectionString, bool overwrite = false)
     {
-        return BuildConnectionString(
-            dataSource: "localhost",
-            database: databasePath,
-            userId: userId,
-            password: password
-        );
-    }
-
-    public static string BuildEmbeddedConnectionString(
-        string databasePath,
-        string userId = "SYSDBA",
-        string password = "masterkey")
-    {
-        var builder = new FbConnectionStringBuilder
-        {
-            Database = databasePath,
-            UserID = userId,
-            Password = password,
-            Charset = "UTF8",
-            ServerType = FbServerType.Embedded
-        };
-
-        return builder.ConnectionString;
-    }
-
-    public static void CreateDatabase(string connectionString)
-    {
-        FbConnection.CreateDatabase(connectionString, overwrite: false);
-    }
-
-    public static void CreateDatabaseIfNotExists(string connectionString)
-    {
-        try
-        {
-            using var connection = new FbConnection(connectionString);
-            connection.Open();
-        }
-        catch (FbException)
-        {
-            FbConnection.CreateDatabase(connectionString, overwrite: false);
-        }
+        FbConnection.CreateDatabase(connectionString, overwrite: overwrite);
     }
 }
 
