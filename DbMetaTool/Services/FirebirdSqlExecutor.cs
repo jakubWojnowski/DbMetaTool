@@ -4,17 +4,14 @@ using FirebirdSql.Data.FirebirdClient;
 
 namespace DbMetaTool.Services;
 
-public class FirebirdSqlExecutor : ISqlExecutor, IDisposable
+public class FirebirdSqlExecutor
+(
+    FirebirdConnectionFactory connectionFactory
+) : ISqlExecutor, IDisposable
 {
-    private readonly FirebirdConnectionFactory _connectionFactory;
     private FbConnection? _connection;
     private FbTransaction? _transaction;
     private bool _disposed;
-
-    public FirebirdSqlExecutor(FirebirdConnectionFactory connectionFactory)
-    {
-        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
-    }
 
     public void ExecuteInTransaction(Action<ISqlExecutor> action)
     {
@@ -71,25 +68,6 @@ public class FirebirdSqlExecutor : ISqlExecutor, IDisposable
         }
     }
 
-    public T ExecuteScalar<T>(string sql)
-    {
-        if (string.IsNullOrWhiteSpace(sql))
-            throw new ArgumentException("SQL cannot be empty", nameof(sql));
-
-        EnsureConnection();
-
-        using var command = _connection!.CreateCommand();
-        command.Transaction = _transaction;
-        command.CommandText = sql;
-        
-        var result = command.ExecuteScalar();
-        
-        if (result == null || result == DBNull.Value)
-            return default!;
-
-        return (T)result;
-    }
-
     public List<T> ExecuteQuery<T>(string sql, Func<System.Data.IDataReader, T> mapper)
     {
         if (string.IsNullOrWhiteSpace(sql))
@@ -119,7 +97,7 @@ public class FirebirdSqlExecutor : ISqlExecutor, IDisposable
     {
         if (_connection == null)
         {
-            _connection = _connectionFactory.CreateAndOpenConnection();
+            _connection = connectionFactory.CreateAndOpenConnection();
         }
         else if (_connection.State != System.Data.ConnectionState.Open)
         {

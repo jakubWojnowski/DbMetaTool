@@ -35,9 +35,10 @@ public static class UpdateDatabaseCommandHandler
 
         var updateService = new DatabaseUpdateService(sqlExecutor);
         
-        updateService.ProcessDomains(scripts, existingDomains);
-        updateService.ProcessTables(scripts, existingTables);
-        updateService.ProcessProcedures(scripts, existingProcedures);
+        updateService.ProcessUpdate(
+            scripts, 
+            existingDomains, 
+            existingTables);
 
         UpdateReportGenerator.DisplayReport(updateService.GetChanges());
     }

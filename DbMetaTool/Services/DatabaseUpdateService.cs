@@ -3,13 +3,27 @@ using DbMetaTool.Utilities;
 
 namespace DbMetaTool.Services;
 
-public class DatabaseUpdateService(ISqlExecutor executor)
+public class DatabaseUpdateService(ISqlExecutor mainExecutor)
 {
     private readonly List<DatabaseChange> _changes = [];
 
     public List<DatabaseChange> GetChanges() => _changes;
 
-    public void ProcessDomains(
+    public void ProcessUpdate(
+        List<ScriptFile> scripts,
+        List<DomainMetadata> existingDomains,
+        List<TableMetadata> existingTables)
+    {
+        mainExecutor.ExecuteInTransaction(executor =>
+        {
+            ProcessDomains(executor, scripts, existingDomains);
+            ProcessTables(executor, scripts, existingTables);
+            ProcessProcedures(executor, scripts);
+        });
+    }
+
+    private void ProcessDomains(
+        ISqlExecutor executor,
         List<ScriptFile> scripts,
         List<DomainMetadata> existingDomains)
     {
@@ -25,7 +39,7 @@ public class DatabaseUpdateService(ISqlExecutor executor)
 
             if (!exists)
             {
-                TryCreateDomain(script, domainName);
+                TryCreateDomain(executor, script, domainName);
             }
             else
             {
@@ -36,7 +50,8 @@ public class DatabaseUpdateService(ISqlExecutor executor)
         Console.WriteLine();
     }
 
-    public void ProcessTables(
+    private void ProcessTables(
+        ISqlExecutor executor,
         List<ScriptFile> scripts,
         List<TableMetadata> existingTables)
     {
@@ -52,21 +67,21 @@ public class DatabaseUpdateService(ISqlExecutor executor)
 
             if (existingTable == null)
             {
-                TryCreateTable(script, tableName);
+                TryCreateTable(executor, script, tableName);
             }
             else
             {
                 Console.WriteLine($"  Tabela {tableName} istnieje - sprawdzam kolumny...");
-                ProcessTableColumns(script, existingTable);
+                ProcessTableColumns(executor, script, existingTable);
             }
         }
 
         Console.WriteLine();
     }
 
-    public void ProcessProcedures(
-        List<ScriptFile> scripts,
-        List<ProcedureMetadata> existingProcedures)
+    private void ProcessProcedures(
+        ISqlExecutor executor,
+        List<ScriptFile> scripts)
     {
         Console.WriteLine("=== Przetwarzanie procedur ===");
 
@@ -75,13 +90,13 @@ public class DatabaseUpdateService(ISqlExecutor executor)
         foreach (var script in procedureScripts)
         {
             var procedureName = Path.GetFileNameWithoutExtension(script.FileName);
-            TryExecuteProcedureScript(script, procedureName);
+            TryExecuteProcedureScript(executor, script, procedureName);
         }
 
         Console.WriteLine();
     }
 
-    private void TryCreateDomain(ScriptFile script, string domainName)
+    private void TryCreateDomain(ISqlExecutor executor, ScriptFile script, string domainName)
     {
         try
         {
@@ -107,10 +122,11 @@ public class DatabaseUpdateService(ISqlExecutor executor)
                 ChangeType.ManualReviewRequired,
                 domainName,
                 $"Błąd tworzenia: {ex.Message}"));
+            throw;
         }
     }
 
-    private void TryCreateTable(ScriptFile script, string tableName)
+    private void TryCreateTable(ISqlExecutor executor, ScriptFile script, string tableName)
     {
         try
         {
@@ -136,10 +152,11 @@ public class DatabaseUpdateService(ISqlExecutor executor)
                 ChangeType.ManualReviewRequired,
                 tableName,
                 $"Błąd tworzenia: {ex.Message}"));
+            throw;
         }
     }
 
-    private void ProcessTableColumns(ScriptFile script, TableMetadata existingTable)
+    private void ProcessTableColumns(ISqlExecutor executor, ScriptFile script, TableMetadata existingTable)
     {
         var sql = ScriptLoader.ReadScriptContent(script);
         var desiredTable = ScriptDefinitionParser.ParseTableFromScript(sql, existingTable.Name);
@@ -166,12 +183,12 @@ public class DatabaseUpdateService(ISqlExecutor executor)
             }
             else
             {
-                TryAddColumn(statement, existingTable.Name);
+                TryAddColumn(executor, statement, existingTable.Name);
             }
         }
     }
 
-    private void TryAddColumn(string statement, string tableName)
+    private void TryAddColumn(ISqlExecutor executor, string statement, string tableName)
     {
         try
         {
@@ -192,10 +209,11 @@ public class DatabaseUpdateService(ISqlExecutor executor)
                 ChangeType.ManualReviewRequired,
                 tableName,
                 $"Błąd ALTER: {ex.Message}"));
+            throw;
         }
     }
 
-    private void TryExecuteProcedureScript(ScriptFile script, string procedureName)
+    private void TryExecuteProcedureScript(ISqlExecutor executor, ScriptFile script, string procedureName)
     {
         try
         {
@@ -224,6 +242,7 @@ public class DatabaseUpdateService(ISqlExecutor executor)
                 ChangeType.ManualReviewRequired,
                 procedureName,
                 $"Błąd: {ex.Message}"));
+            throw;
         }
     }
 }
