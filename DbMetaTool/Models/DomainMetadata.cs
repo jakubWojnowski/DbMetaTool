@@ -11,3 +11,4 @@ public record DomainMetadata(
     string? CheckConstraint
 );
 
+
