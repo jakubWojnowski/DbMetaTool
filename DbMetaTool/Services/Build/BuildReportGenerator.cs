@@ -9,9 +9,6 @@ public static class BuildReportGenerator
         Console.WriteLine();
         Console.WriteLine("=== Podsumowanie ===");
         Console.WriteLine($"Wykonano pomyślnie: {result.ExecutedCount}");
-        Console.WriteLine();
-        Console.WriteLine("Connection String:");
-        Console.WriteLine(result.ConnectionString);
     }
 }
 

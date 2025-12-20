@@ -17,7 +17,6 @@ public static class DatabaseBuildService
         {
             Console.WriteLine("⚠ Nie znaleziono żadnych skryptów do wykonania");
             return new BuildResult(
-                ConnectionString: string.Empty,
                 ExecutedCount: 0,
                 DomainScripts: 0,
                 TableScripts: 0,
@@ -28,10 +27,8 @@ public static class DatabaseBuildService
 
         ExecuteScripts(databaseFilePath, scripts);
 
-        var connectionString = FirebirdConnectionFactory.BuildConnectionString(databaseFilePath);
 
         return new BuildResult(
-            ConnectionString: connectionString,
             ExecutedCount: scripts.Count,
             DomainScripts: scripts.Count(s => s.Type == ScriptType.Domain),
             TableScripts: scripts.Count(s => s.Type == ScriptType.Table),
