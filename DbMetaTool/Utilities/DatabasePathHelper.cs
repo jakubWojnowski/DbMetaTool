@@ -2,36 +2,58 @@ namespace DbMetaTool.Utilities;
 
 public static class DatabasePathHelper
 {
-    public static (string Directory, string FilePath) BuildDatabasePaths(string databaseDirectory)
+    public static (string Directory, string FilePath) BuildDatabasePaths(string databaseName)
     {
-        if (string.IsNullOrWhiteSpace(databaseDirectory))
-            throw new ArgumentException("Database directory cannot be empty", nameof(databaseDirectory));
+        if (string.IsNullOrWhiteSpace(databaseName))
+        {
+            throw new ArgumentException("Database name cannot be empty", nameof(databaseName));
+        }
 
-        var isUnixPath = databaseDirectory.StartsWith("/");
+        databaseName = databaseName.Replace(".fdb", "").Trim();
 
-        string absoluteDatabaseDirectory;
+        var isUnixPath = databaseName.StartsWith("/");
+
+        string databaseDirectory;
         string databaseFilePath;
 
         if (isUnixPath)
         {
-            absoluteDatabaseDirectory = databaseDirectory.TrimEnd('/');
-            var databaseName = Path.GetFileName(absoluteDatabaseDirectory);
-            databaseFilePath = $"{absoluteDatabaseDirectory}/{databaseName}.fdb";
+            var lastSlashIndex = databaseName.LastIndexOf('/');
+            if (lastSlashIndex > 0)
+            {
+                databaseDirectory = databaseName[..lastSlashIndex];
+                var fileName = databaseName[(lastSlashIndex + 1)..];
+                databaseFilePath = $"{databaseDirectory}/{fileName}.fdb";
+            }
+            else
+            {
+                databaseDirectory = "/var/lib/firebird/data";
+                databaseFilePath = $"{databaseDirectory}/{databaseName}.fdb";
+            }
         }
         else
         {
-            absoluteDatabaseDirectory = Path.GetFullPath(databaseDirectory);
+            bool isAbsolutePath = Path.IsPathRooted(databaseName);
             
-            if (!Directory.Exists(absoluteDatabaseDirectory))
+            if (isAbsolutePath)
             {
-                Directory.CreateDirectory(absoluteDatabaseDirectory);
+                databaseDirectory = Path.GetDirectoryName(databaseName) ?? ".";
+                var fileName = Path.GetFileName(databaseName);
+                databaseFilePath = Path.Combine(databaseDirectory, $"{fileName}.fdb");
             }
-
-            var databaseName = Path.GetFileName(absoluteDatabaseDirectory);
-            databaseFilePath = Path.Combine(absoluteDatabaseDirectory, $"{databaseName}.fdb");
+            else
+            {
+                databaseDirectory = Path.GetFullPath("./databases");
+                databaseFilePath = Path.Combine(databaseDirectory, $"{databaseName}.fdb");
+            }
+            
+            if (!Directory.Exists(databaseDirectory))
+            {
+                Directory.CreateDirectory(databaseDirectory);
+            }
         }
 
-        return (absoluteDatabaseDirectory, databaseFilePath);
+        return (databaseDirectory, databaseFilePath);
     }
 }
 

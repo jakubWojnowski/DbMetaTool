@@ -64,17 +64,14 @@ firebird-db    firebirdsql/firebird:5.0.1   Up 2 minutes   0.0.0.0:3050->3050/tc
 - **Password**: `masterkey`
 - **Connection String**: `DataSource=localhost;Port=3050;Database=/var/lib/firebird/data/<nazwa_bazy>/<nazwa_bazy>.fdb;User=SYSDBA;Password=masterkey`
 
+#### Przechowywanie danych
+
+Bazy danych są przechowywane w **Docker volume** `firebird-data`. Dane są trwałe i przetrwają restart kontenera.
+
 #### Zatrzymanie kontenera
 
 ```bash
 docker-compose down
-```
-
-#### Wyczyszczenie danych (UWAGA: usuwa wszystkie bazy!)
-
-```bash
-docker-compose down -v
-rm -rf ./data/*
 ```
 
 ## 🚀 Użycie
@@ -115,12 +112,19 @@ dotnet run --project DbMetaTool build-db --db-dir <ścieżka> --scripts-dir <śc
 #### Przykład
 
 ```bash
-# Windows - ścieżka dla Dockera
+# Docker - baza bezpośrednio w /var/lib/firebird/data/
 dotnet run --project DbMetaTool build-db \
   --db-dir "/var/lib/firebird/data/myapp" \
   --scripts-dir "./scripts"
 
-# Wynik w Docker volume: compose/data/myapp/myapp.fdb
+# Wynik: /var/lib/firebird/data/myapp.fdb
+
+# Windows - baza w lokalnym katalogu ./databases/
+dotnet run --project DbMetaTool build-db \
+  --db-dir "myapp" \
+  --scripts-dir "./scripts"
+
+# Wynik: ./databases/myapp.fdb
 ```
 
 #### Struktura katalogu skryptów
