@@ -179,13 +179,104 @@ public static class FirebirdMetadataReader
 
         return executor.ExecuteQuery(sql.ToString(), reader =>
         {
+            var procedureName = reader["PROCEDURE_NAME"].ToString()!.Trim();
             var source = reader["PROCEDURE_SOURCE"] == DBNull.Value
                 ? null
                 : reader["PROCEDURE_SOURCE"].ToString();
 
+            var fullSource = BuildFullProcedureDefinition(executor, procedureName, source);
+
             return new ProcedureMetadata(
-                Name: reader["PROCEDURE_NAME"].ToString()!.Trim(),
-                Source: source);
+                Name: procedureName,
+                Source: fullSource);
+        });
+    }
+
+    private static string? BuildFullProcedureDefinition(ISqlExecutor executor, string procedureName, string? body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return null;
+        }
+
+        var inputParams = ReadProcedureParameters(executor, procedureName, isInput: true);
+        var outputParams = ReadProcedureParameters(executor, procedureName, isInput: false);
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"CREATE PROCEDURE {procedureName}");
+
+        if (inputParams.Count > 0)
+        {
+            sb.AppendLine("(");
+            var paramLines = inputParams.Select(p => $"    {p.Name} {p.DataType}");
+            sb.AppendLine(string.Join("," + Environment.NewLine, paramLines));
+            sb.AppendLine(")");
+        }
+
+        if (outputParams.Count > 0)
+        {
+            sb.AppendLine("RETURNS");
+            sb.AppendLine("(");
+            var paramLines = outputParams.Select(p => $"    {p.Name} {p.DataType}");
+            sb.AppendLine(string.Join("," + Environment.NewLine, paramLines));
+            sb.AppendLine(")");
+        }
+
+        sb.AppendLine("AS");
+        sb.AppendLine(body.Trim());
+
+        return sb.ToString();
+    }
+
+    private static List<(string Name, string DataType)> ReadProcedureParameters(
+        ISqlExecutor executor,
+        string procedureName,
+        bool isInput)
+    {
+        var sql = new StringBuilder();
+        sql.AppendLine("SELECT");
+        sql.AppendLine("    pp.RDB$PARAMETER_NAME AS PARAM_NAME,");
+        sql.AppendLine("    f.RDB$FIELD_TYPE AS FIELD_TYPE,");
+        sql.AppendLine("    f.RDB$FIELD_SUB_TYPE AS FIELD_SUBTYPE,");
+        sql.AppendLine("    f.RDB$FIELD_LENGTH AS FIELD_LENGTH,");
+        sql.AppendLine("    f.RDB$FIELD_PRECISION AS FIELD_PRECISION,");
+        sql.AppendLine("    f.RDB$FIELD_SCALE AS FIELD_SCALE,");
+        sql.AppendLine("    pp.RDB$PARAMETER_NUMBER AS PARAM_NUMBER");
+        sql.AppendLine("FROM RDB$PROCEDURE_PARAMETERS pp");
+        sql.AppendLine("JOIN RDB$FIELDS f ON pp.RDB$FIELD_SOURCE = f.RDB$FIELD_NAME");
+        sql.AppendLine($"WHERE pp.RDB$PROCEDURE_NAME = '{procedureName}'");
+        sql.AppendLine($"  AND pp.RDB$PARAMETER_TYPE = {(isInput ? 0 : 1)}");
+        sql.AppendLine("ORDER BY pp.RDB$PARAMETER_NUMBER");
+
+        return executor.ExecuteQuery(sql.ToString(), reader =>
+        {
+            var fieldType = (FirebirdFieldType)Convert.ToInt32(reader["FIELD_TYPE"]);
+            var fieldSubType = reader["FIELD_SUBTYPE"] == DBNull.Value
+                ? (int?)null
+                : Convert.ToInt32(reader["FIELD_SUBTYPE"]);
+            var fieldLength = reader["FIELD_LENGTH"] == DBNull.Value
+                ? (int?)null
+                : Convert.ToInt32(reader["FIELD_LENGTH"]);
+            var fieldPrecision = reader["FIELD_PRECISION"] == DBNull.Value
+                ? (int?)null
+                : Convert.ToInt32(reader["FIELD_PRECISION"]);
+            var fieldScale = reader["FIELD_SCALE"] == DBNull.Value
+                ? (int?)null
+                : Convert.ToInt32(reader["FIELD_SCALE"]);
+
+            var charLength = CalculateCharacterLength(fieldType, fieldLength);
+            var dataType = MapFirebirdTypeToString(
+                fieldType,
+                fieldSubType,
+                fieldLength,
+                fieldPrecision,
+                fieldScale,
+                charLength);
+
+            return (
+                Name: reader["PARAM_NAME"].ToString()!.Trim(),
+                DataType: dataType
+            );
         });
     }
 
