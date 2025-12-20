@@ -1,9 +1,10 @@
 using DbMetaTool.Firebird;
 using DbMetaTool.Models;
 using DbMetaTool.Models.results;
-using DbMetaTool.Utilities;
+using DbMetaTool.Services.Firebird;
+using DbMetaTool.Services.SqlScripts;
 
-namespace DbMetaTool.Services;
+namespace DbMetaTool.Services.Build;
 
 public static class DatabaseBuildService
 {
@@ -40,6 +41,7 @@ public static class DatabaseBuildService
     private static void CreateEmptyDatabase(string databaseFilePath)
     {
         FirebirdDatabaseCreator.CreateDatabase(databaseFilePath);
+        
         Console.WriteLine("✓ Utworzono pustą bazę danych");
     }
 
@@ -62,6 +64,7 @@ public static class DatabaseBuildService
         List<ScriptFile> scripts)
     {
         var connectionString = FirebirdConnectionFactory.BuildConnectionString(databaseFilePath);
+        
         var connectionFactory = new FirebirdConnectionFactory(connectionString);
 
         using var sqlExecutor = new FirebirdSqlExecutor(connectionFactory);
@@ -73,6 +76,7 @@ public static class DatabaseBuildService
                 Console.Write($"Wykonywanie: {script.Type}/{script.FileName}... ");
 
                 var sql = ScriptLoader.ReadScriptContent(script);
+                
                 executor.ExecuteScript(sql);
 
                 Console.WriteLine("✓");

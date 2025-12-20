@@ -1,13 +1,12 @@
-using DbMetaTool.Models;
 using System.Text;
+using DbMetaTool.Models;
+using DbMetaTool.Services.Firebird;
 
-namespace DbMetaTool.Services;
+namespace DbMetaTool.Services.Metadata;
 
 public static class FirebirdMetadataReader
 {
     private const string SystemPrefixRdb = "RDB$";
-    private const string SystemPrefixMon = "MON$";
-    private const string SystemPrefixSec = "SEC$";
 
     public static List<DomainMetadata> ReadDomains(ISqlExecutor executor)
     {
@@ -31,24 +30,28 @@ public static class FirebirdMetadataReader
         return executor.ExecuteQuery(sql.ToString(), reader =>
         {
             var fieldType = (FirebirdFieldType)Convert.ToInt32(reader["FIELD_TYPE"]);
+            
             var fieldSubType = reader["FIELD_SUBTYPE"] == DBNull.Value
                 ? (int?)null
                 : Convert.ToInt32(reader["FIELD_SUBTYPE"]);
+            
             var fieldLength = reader["FIELD_LENGTH"] == DBNull.Value
                 ? (int?)null
                 : Convert.ToInt32(reader["FIELD_LENGTH"]);
+            
             var fieldPrecision = reader["FIELD_PRECISION"] == DBNull.Value
                 ? (int?)null
                 : Convert.ToInt32(reader["FIELD_PRECISION"]);
+            
             var fieldScale = reader["FIELD_SCALE"] == DBNull.Value
                 ? (int?)null
                 : Convert.ToInt32(reader["FIELD_SCALE"]);
 
             var charLength = CalculateCharacterLength(fieldType, fieldLength);
+            
             var dataType = MapFirebirdTypeToString(
                 fieldType,
                 fieldSubType,
-                fieldLength,
                 fieldPrecision,
                 fieldScale,
                 charLength);
@@ -69,6 +72,7 @@ public static class FirebirdMetadataReader
     public static List<TableMetadata> ReadTables(ISqlExecutor executor)
     {
         var sql = new StringBuilder();
+        
         sql.AppendLine("SELECT");
         sql.AppendLine("    RDB$RELATION_NAME AS TABLE_NAME");
         sql.AppendLine("FROM RDB$RELATIONS");
@@ -97,6 +101,7 @@ public static class FirebirdMetadataReader
     private static List<ColumnMetadata> ReadTableColumns(ISqlExecutor executor, string tableName)
     {
         var sql = new StringBuilder();
+        
         sql.AppendLine("SELECT");
         sql.AppendLine("    rf.RDB$FIELD_NAME AS COLUMN_NAME,");
         sql.AppendLine("    rf.RDB$FIELD_SOURCE AS FIELD_SOURCE,");
@@ -116,16 +121,21 @@ public static class FirebirdMetadataReader
         return executor.ExecuteQuery(sql.ToString(), reader =>
         {
             var fieldSource = reader["FIELD_SOURCE"].ToString()!.Trim();
+            
             var fieldType = (FirebirdFieldType)Convert.ToInt32(reader["FIELD_TYPE"]);
+            
             var fieldSubType = reader["FIELD_SUBTYPE"] == DBNull.Value
                 ? (int?)null
                 : Convert.ToInt32(reader["FIELD_SUBTYPE"]);
+            
             var fieldLength = reader["FIELD_LENGTH"] == DBNull.Value
                 ? (int?)null
                 : Convert.ToInt32(reader["FIELD_LENGTH"]);
+            
             var fieldPrecision = reader["FIELD_PRECISION"] == DBNull.Value
                 ? (int?)null
                 : Convert.ToInt32(reader["FIELD_PRECISION"]);
+            
             var fieldScale = reader["FIELD_SCALE"] == DBNull.Value
                 ? (int?)null
                 : Convert.ToInt32(reader["FIELD_SCALE"]);
@@ -133,6 +143,7 @@ public static class FirebirdMetadataReader
             var charLength = CalculateCharacterLength(fieldType, fieldLength);
 
             string dataType;
+            
             string? domainName = null;
 
             if (fieldSource.StartsWith(SystemPrefixRdb))
@@ -140,7 +151,6 @@ public static class FirebirdMetadataReader
                 dataType = MapFirebirdTypeToString(
                     fieldType,
                     fieldSubType,
-                    fieldLength,
                     fieldPrecision,
                     fieldScale,
                     charLength);
@@ -168,6 +178,7 @@ public static class FirebirdMetadataReader
     public static List<ProcedureMetadata> ReadProcedures(ISqlExecutor executor)
     {
         var sql = new StringBuilder();
+        
         sql.AppendLine("SELECT");
         sql.AppendLine("    RDB$PROCEDURE_NAME AS PROCEDURE_NAME,");
         sql.AppendLine("    RDB$PROCEDURE_SOURCE AS PROCEDURE_SOURCE");
@@ -200,6 +211,7 @@ public static class FirebirdMetadataReader
         }
 
         var inputParams = ReadProcedureParameters(executor, procedureName, isInput: true);
+        
         var outputParams = ReadProcedureParameters(executor, procedureName, isInput: false);
 
         var sb = new StringBuilder();
@@ -208,21 +220,29 @@ public static class FirebirdMetadataReader
         if (inputParams.Count > 0)
         {
             sb.AppendLine("(");
+            
             var paramLines = inputParams.Select(p => $"    {p.Name} {p.DataType}");
+            
             sb.AppendLine(string.Join("," + Environment.NewLine, paramLines));
+            
             sb.AppendLine(")");
         }
 
         if (outputParams.Count > 0)
         {
             sb.AppendLine("RETURNS");
+            
             sb.AppendLine("(");
+            
             var paramLines = outputParams.Select(p => $"    {p.Name} {p.DataType}");
+            
             sb.AppendLine(string.Join("," + Environment.NewLine, paramLines));
+            
             sb.AppendLine(")");
         }
 
         sb.AppendLine("AS");
+        
         sb.AppendLine(body.Trim());
 
         return sb.ToString();
@@ -234,6 +254,7 @@ public static class FirebirdMetadataReader
         bool isInput)
     {
         var sql = new StringBuilder();
+        
         sql.AppendLine("SELECT");
         sql.AppendLine("    pp.RDB$PARAMETER_NAME AS PARAM_NAME,");
         sql.AppendLine("    f.RDB$FIELD_TYPE AS FIELD_TYPE,");
@@ -254,12 +275,15 @@ public static class FirebirdMetadataReader
             var fieldSubType = reader["FIELD_SUBTYPE"] == DBNull.Value
                 ? (int?)null
                 : Convert.ToInt32(reader["FIELD_SUBTYPE"]);
+            
             var fieldLength = reader["FIELD_LENGTH"] == DBNull.Value
                 ? (int?)null
                 : Convert.ToInt32(reader["FIELD_LENGTH"]);
+            
             var fieldPrecision = reader["FIELD_PRECISION"] == DBNull.Value
                 ? (int?)null
                 : Convert.ToInt32(reader["FIELD_PRECISION"]);
+            
             var fieldScale = reader["FIELD_SCALE"] == DBNull.Value
                 ? (int?)null
                 : Convert.ToInt32(reader["FIELD_SCALE"]);
@@ -268,7 +292,6 @@ public static class FirebirdMetadataReader
             var dataType = MapFirebirdTypeToString(
                 fieldType,
                 fieldSubType,
-                fieldLength,
                 fieldPrecision,
                 fieldScale,
                 charLength);
@@ -282,7 +305,7 @@ public static class FirebirdMetadataReader
 
     private static int? CalculateCharacterLength(FirebirdFieldType fieldType, int? fieldLength)
     {
-        if (fieldType == FirebirdFieldType.Char || fieldType == FirebirdFieldType.VarChar)
+        if (fieldType is FirebirdFieldType.Char or FirebirdFieldType.VarChar)
         {
             return fieldLength;
         }
@@ -292,7 +315,7 @@ public static class FirebirdMetadataReader
 
     private static int? CalculateAbsoluteScale(int? fieldScale)
     {
-        if (fieldScale.HasValue && fieldScale.Value < 0)
+        if (fieldScale is < 0)
         {
             return Math.Abs(fieldScale.Value);
         }
@@ -323,7 +346,6 @@ public static class FirebirdMetadataReader
     private static string MapFirebirdTypeToString(
         FirebirdFieldType fieldType,
         int? fieldSubType,
-        int? fieldLength,
         int? fieldPrecision,
         int? fieldScale,
         int? charLength)
@@ -385,10 +407,12 @@ public static class FirebirdMetadataReader
         if (length.HasValue)
         {
             var sb = new StringBuilder();
+            
             sb.Append(baseType);
             sb.Append('(');
             sb.Append(length.Value);
             sb.Append(')');
+            
             return sb.ToString();
         }
 

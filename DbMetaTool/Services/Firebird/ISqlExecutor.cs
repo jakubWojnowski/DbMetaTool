@@ -1,4 +1,4 @@
-namespace DbMetaTool.Services;
+namespace DbMetaTool.Services.Firebird;
 
 public interface ISqlExecutor
 {

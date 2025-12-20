@@ -1,7 +1,9 @@
 using DbMetaTool.Models;
+using DbMetaTool.Services.Firebird;
+using DbMetaTool.Services.SqlScripts;
 using DbMetaTool.Utilities;
 
-namespace DbMetaTool.Services;
+namespace DbMetaTool.Services.Update;
 
 public class DatabaseUpdateService(ISqlExecutor mainExecutor)
 {
@@ -17,7 +19,9 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         mainExecutor.ExecuteInTransaction(executor =>
         {
             ProcessDomains(executor, scripts, existingDomains);
+            
             ProcessTables(executor, scripts, existingTables);
+            
             ProcessProcedures(executor, scripts);
         });
     }
@@ -34,6 +38,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         foreach (var script in domainScripts)
         {
             var domainName = Path.GetFileNameWithoutExtension(script.FileName);
+            
             var exists = existingDomains.Any(d => 
                 d.Name.Equals(domainName, StringComparison.OrdinalIgnoreCase));
 
@@ -62,6 +67,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         foreach (var script in tableScripts)
         {
             var tableName = Path.GetFileNameWithoutExtension(script.FileName);
+            
             var existingTable = existingTables.FirstOrDefault(t =>
                 t.Name.Equals(tableName, StringComparison.OrdinalIgnoreCase));
 
@@ -72,6 +78,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
             else
             {
                 Console.WriteLine($"  Tabela {tableName} istnieje - sprawdzam kolumny...");
+                
                 ProcessTableColumns(executor, script, existingTable);
             }
         }
@@ -90,6 +97,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         foreach (var script in procedureScripts)
         {
             var procedureName = Path.GetFileNameWithoutExtension(script.FileName);
+            
             TryExecuteProcedureScript(executor, script, procedureName);
         }
 
@@ -101,7 +109,9 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         try
         {
             Console.Write($"  Tworzenie domeny {domainName}... ");
+            
             var sql = ScriptLoader.ReadScriptContent(script);
+            
             var statements = SqlScriptParser.ParseScript(sql);
 
             foreach (var statement in statements)
@@ -118,6 +128,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         catch (Exception ex)
         {
             Console.WriteLine($"✗ Błąd: {ex.Message}");
+            
             _changes.Add(new DatabaseChange(
                 ChangeType.ManualReviewRequired,
                 domainName,
@@ -131,7 +142,9 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         try
         {
             Console.Write($"  Tworzenie tabeli {tableName}... ");
+            
             var sql = ScriptLoader.ReadScriptContent(script);
+            
             var statements = SqlScriptParser.ParseScript(sql);
 
             foreach (var statement in statements)
@@ -143,15 +156,18 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
                 ChangeType.TableCreated,
                 tableName,
                 null));
+            
             Console.WriteLine("✓");
         }
         catch (Exception ex)
         {
             Console.WriteLine($"✗ Błąd: {ex.Message}");
+            
             _changes.Add(new DatabaseChange(
                 ChangeType.ManualReviewRequired,
                 tableName,
                 $"Błąd tworzenia: {ex.Message}"));
+            
             throw;
         }
     }
@@ -159,6 +175,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
     private void ProcessTableColumns(ISqlExecutor executor, ScriptFile script, TableMetadata existingTable)
     {
         var sql = ScriptLoader.ReadScriptContent(script);
+        
         var desiredTable = ScriptDefinitionParser.ParseTableFromScript(sql, existingTable.Name);
 
         if (desiredTable == null)
@@ -176,6 +193,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
             if (statement.StartsWith("--"))
             {
                 Console.WriteLine($"    ⚠ {statement}");
+                
                 _changes.Add(new DatabaseChange(
                     ChangeType.ManualReviewRequired,
                     existingTable.Name,
@@ -193,9 +211,11 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         try
         {
             Console.Write($"    Dodawanie kolumny... ");
+            
             executor.ExecuteNonQuery(statement);
 
             var columnName = ScriptDefinitionParser.ExtractColumnName(statement);
+            
             _changes.Add(new DatabaseChange(
                 ChangeType.ColumnAdded,
                 $"{tableName}.{columnName}",
@@ -205,10 +225,12 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         catch (Exception ex)
         {
             Console.WriteLine($"✗ Błąd: {ex.Message}");
+            
             _changes.Add(new DatabaseChange(
                 ChangeType.ManualReviewRequired,
                 tableName,
                 $"Błąd ALTER: {ex.Message}"));
+            
             throw;
         }
     }
@@ -218,7 +240,9 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         try
         {
             Console.Write($"  Procedura {procedureName}... ");
+            
             var sql = ScriptLoader.ReadScriptContent(script);
+            
             var statements = SqlScriptParser.ParseScript(sql);
 
             foreach (var statement in statements)
@@ -238,10 +262,12 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         catch (Exception ex)
         {
             Console.WriteLine($"✗ Błąd: {ex.Message}");
+            
             _changes.Add(new DatabaseChange(
                 ChangeType.ManualReviewRequired,
                 procedureName,
                 $"Błąd: {ex.Message}"));
+            
             throw;
         }
     }

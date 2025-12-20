@@ -2,7 +2,7 @@ using DbMetaTool.Firebird;
 using DbMetaTool.Utilities;
 using FirebirdSql.Data.FirebirdClient;
 
-namespace DbMetaTool.Services;
+namespace DbMetaTool.Services.Firebird;
 
 public class FirebirdSqlExecutor
 (
@@ -21,6 +21,7 @@ public class FirebirdSqlExecutor
         EnsureConnection();
 
         using var transaction = _connection!.BeginTransaction();
+        
         _transaction = transaction;
 
         try
@@ -47,8 +48,11 @@ public class FirebirdSqlExecutor
         EnsureConnection();
 
         using var command = _connection!.CreateCommand();
+
         command.Transaction = _transaction;
+
         command.CommandText = sql;
+
         command.ExecuteNonQuery();
     }
 
@@ -81,7 +85,9 @@ public class FirebirdSqlExecutor
         var results = new List<T>();
 
         using var command = _connection!.CreateCommand();
+
         command.Transaction = _transaction;
+
         command.CommandText = sql;
 
         using var reader = command.ExecuteReader();
@@ -111,6 +117,7 @@ public class FirebirdSqlExecutor
             return;
 
         _transaction?.Dispose();
+        
         _connection?.Dispose();
 
         _disposed = true;

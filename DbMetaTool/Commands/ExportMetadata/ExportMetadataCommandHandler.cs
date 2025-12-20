@@ -1,5 +1,7 @@
 using DbMetaTool.Firebird;
 using DbMetaTool.Services;
+using DbMetaTool.Services.Export;
+using DbMetaTool.Services.Firebird;
 
 namespace DbMetaTool.Commands.ExportMetadata;
 
@@ -19,6 +21,7 @@ public static class ExportMetadataCommandHandler
         Console.WriteLine();
 
         var connectionFactory = new FirebirdConnectionFactory(command.ConnectionString);
+        
         using var sqlExecutor = new FirebirdSqlExecutor(connectionFactory);
 
         var result = MetadataExportService.ExportAll(sqlExecutor, command.OutputDirectory);

@@ -7,7 +7,9 @@ public static class ScriptDefinitionParser
     public static TableMetadata? ParseTableFromScript(string sql, string tableName)
     {
         var lines = sql.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
+        
         var columns = new List<ColumnMetadata>();
+        
         var position = 0;
 
         var inColumns = false;
@@ -29,6 +31,7 @@ public static class ScriptDefinitionParser
             if (inColumns && !string.IsNullOrWhiteSpace(trimmed) && !trimmed.StartsWith("--"))
             {
                 var columnDef = ParseColumnDefinition(trimmed, position++);
+                
                 if (columnDef != null)
                 {
                     columns.Add(columnDef);
@@ -49,6 +52,7 @@ public static class ScriptDefinitionParser
         line = line.TrimEnd(',').Trim();
         
         var notNullIndex = line.IndexOf("NOT NULL", StringComparison.OrdinalIgnoreCase);
+        
         var defaultIndex = line.IndexOf("DEFAULT", StringComparison.OrdinalIgnoreCase);
         
         var endOfTypeIndex = line.Length;
@@ -64,13 +68,16 @@ public static class ScriptDefinitionParser
         var columnDefinition = line[..endOfTypeIndex].Trim();
         
         var firstSpaceIndex = columnDefinition.IndexOf(' ');
+        
         if (firstSpaceIndex < 0)
         {
             return null;
         }
 
         var name = columnDefinition[..firstSpaceIndex].Trim();
+        
         var dataType = columnDefinition[(firstSpaceIndex + 1)..].Trim();
+        
         var isNullable = notNullIndex < 0;
 
         return new ColumnMetadata(
@@ -88,6 +95,7 @@ public static class ScriptDefinitionParser
     public static string ExtractColumnName(string alterStatement)
     {
         var parts = alterStatement.Split([' '], StringSplitOptions.RemoveEmptyEntries);
+        
         var addIndex = Array.FindIndex(parts, p => p.Equals("ADD", StringComparison.OrdinalIgnoreCase));
 
         if (addIndex >= 0 && addIndex + 1 < parts.Length)

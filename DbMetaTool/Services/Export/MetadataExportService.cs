@@ -1,7 +1,9 @@
 using DbMetaTool.Models;
 using DbMetaTool.Models.results;
+using DbMetaTool.Services.Firebird;
+using DbMetaTool.Services.Metadata;
 
-namespace DbMetaTool.Services;
+namespace DbMetaTool.Services.Export;
 
 public static class MetadataExportService
 {
@@ -19,15 +21,20 @@ public static class MetadataExportService
         PrepareOutputDirectory(outputDirectory);
 
         Console.WriteLine("Pobieranie metadanych...");
+        
         var domains = ReadDomains(executor);
+        
         var tables = ReadTables(executor);
+        
         var procedures = ReadProcedures(executor);
 
         Console.WriteLine();
         Console.WriteLine("Generowanie skryptów SQL...");
 
         ExportDomains(outputDirectory, domains);
+        
         ExportTables(outputDirectory, tables);
+        
         ExportProcedures(outputDirectory, procedures);
 
         return new ExportResult(
@@ -47,32 +54,42 @@ public static class MetadataExportService
         }
 
         var domainsDir = Path.Combine(absolutePath, "domains");
+        
         var tablesDir = Path.Combine(absolutePath, "tables");
+        
         var proceduresDir = Path.Combine(absolutePath, "procedures");
 
         Directory.CreateDirectory(domainsDir);
+        
         Directory.CreateDirectory(tablesDir);
+        
         Directory.CreateDirectory(proceduresDir);
     }
 
     private static List<DomainMetadata> ReadDomains(ISqlExecutor executor)
     {
         var domains = FirebirdMetadataReader.ReadDomains(executor);
+        
         Console.WriteLine($"✓ Znaleziono {domains.Count} domen");
+        
         return domains;
     }
 
     private static List<TableMetadata> ReadTables(ISqlExecutor executor)
     {
         var tables = FirebirdMetadataReader.ReadTables(executor);
+        
         Console.WriteLine($"✓ Znaleziono {tables.Count} tabel");
+        
         return tables;
     }
 
     private static List<ProcedureMetadata> ReadProcedures(ISqlExecutor executor)
     {
         var procedures = FirebirdMetadataReader.ReadProcedures(executor);
+        
         Console.WriteLine($"✓ Znaleziono {procedures.Count} procedur");
+        
         return procedures;
     }
 
@@ -83,7 +100,9 @@ public static class MetadataExportService
         foreach (var domain in domains)
         {
             var script = SqlScriptGenerator.GenerateDomainScript(domain);
+            
             var fileName = Path.Combine(domainsDir, $"{domain.Name}.sql");
+            
             File.WriteAllText(fileName, script);
         }
 
@@ -97,7 +116,9 @@ public static class MetadataExportService
         foreach (var table in tables)
         {
             var script = SqlScriptGenerator.GenerateTableScript(table);
+            
             var fileName = Path.Combine(tablesDir, $"{table.Name}.sql");
+            
             File.WriteAllText(fileName, script);
         }
 
@@ -111,7 +132,9 @@ public static class MetadataExportService
         foreach (var procedure in procedures)
         {
             var script = SqlScriptGenerator.GenerateProcedureScript(procedure);
+            
             var fileName = Path.Combine(proceduresDir, $"{procedure.Name}.sql");
+            
             File.WriteAllText(fileName, script);
         }
 
