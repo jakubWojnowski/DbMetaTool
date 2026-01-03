@@ -4,5 +4,3 @@ public record TableMetadata(
     string Name,
     List<ColumnMetadata> Columns
 );
-
-

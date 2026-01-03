@@ -11,14 +11,14 @@ public static class SqlScriptGenerator
 
         sb.Append($"CREATE DOMAIN {domain.Name} AS {domain.DataType}");
 
-        if (!domain.IsNullable)
-        {
-            sb.Append(" NOT NULL");
-        }
-
         if (!string.IsNullOrWhiteSpace(domain.DefaultValue))
         {
             sb.Append($" {domain.DefaultValue.Trim()}");
+        }
+
+        if (!domain.IsNullable)
+        {
+            sb.Append(" NOT NULL");
         }
 
         if (!string.IsNullOrWhiteSpace(domain.CheckConstraint))
@@ -45,14 +45,14 @@ public static class SqlScriptGenerator
             var columnDef = new StringBuilder();
             columnDef.Append($"    {column.Name} {column.DataType}");
 
-            if (!column.IsNullable)
-            {
-                columnDef.Append(" NOT NULL");
-            }
-
             if (!string.IsNullOrWhiteSpace(column.DefaultValue))
             {
                 columnDef.Append($" {column.DefaultValue.Trim()}");
+            }
+
+            if (!column.IsNullable)
+            {
+                columnDef.Append(" NOT NULL");
             }
 
             columnLines.Add(columnDef.ToString());

@@ -20,13 +20,20 @@ public static class MetadataExportService
 
         PrepareOutputDirectory(outputDirectory);
 
-        Console.WriteLine("Pobieranie metadanych...");
+        Console.WriteLine("Pobieranie metadanych (spójny snapshot)...");
         
-        var domains = ReadDomains(executor);
+        var domains = new List<DomainMetadata>();
+        var tables = new List<TableMetadata>();
+        var procedures = new List<ProcedureMetadata>();
         
-        var tables = ReadTables(executor);
-        
-        var procedures = ReadProcedures(executor);
+        executor.ExecuteInReadOnlyTransaction(readOnlyExecutor =>
+        {
+            domains = ReadDomains(readOnlyExecutor);
+            
+            tables = ReadTables(readOnlyExecutor);
+            
+            procedures = ReadProcedures(readOnlyExecutor);
+        });
 
         Console.WriteLine();
         Console.WriteLine("Generowanie skryptów SQL...");

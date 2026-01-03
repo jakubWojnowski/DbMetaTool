@@ -20,7 +20,14 @@ public class FirebirdSqlExecutor
 
         EnsureConnection();
 
-        using var transaction = _connection!.BeginTransaction();
+        var options = new FbTransactionOptions()
+        {
+            TransactionBehavior = FbTransactionBehavior.Concurrency | 
+                                  FbTransactionBehavior.Wait,
+            WaitTimeout = TimeSpan.FromSeconds(10)
+        };
+
+        using var transaction = _connection!.BeginTransaction(options);
         
         _transaction = transaction;
 
@@ -33,6 +40,34 @@ public class FirebirdSqlExecutor
         {
             transaction.Rollback();
             throw;
+        }
+        finally
+        {
+            _transaction = null;
+        }
+    }
+
+    public void ExecuteInReadOnlyTransaction(Action<ISqlExecutor> action)
+    {
+        if (action == null)
+            throw new ArgumentNullException(nameof(action));
+
+        EnsureConnection();
+
+        var options = new FbTransactionOptions()
+        {
+            TransactionBehavior = FbTransactionBehavior.Concurrency | 
+                                  FbTransactionBehavior.Wait | 
+                                  FbTransactionBehavior.Read
+        };
+
+        using var transaction = _connection!.BeginTransaction(options);
+        
+        _transaction = transaction;
+
+        try
+        {
+            action(this);
         }
         finally
         {

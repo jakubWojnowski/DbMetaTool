@@ -1,7 +1,7 @@
-using DbMetaTool.Models;
 using System.Text;
+using DbMetaTool.Models;
 
-namespace DbMetaTool.Services;
+namespace DbMetaTool.Services.Update;
 
 public static class DatabaseSchemaComparer
 {
@@ -31,7 +31,7 @@ public static class DatabaseSchemaComparer
         return statements;
     }
 
-    public static string GenerateAddColumnStatement(string tableName, ColumnMetadata column)
+    private static string GenerateAddColumnStatement(string tableName, ColumnMetadata column)
     {
         var sb = new StringBuilder();
         sb.Append($"ALTER TABLE {tableName} ADD {column.Name} {column.DataType}");

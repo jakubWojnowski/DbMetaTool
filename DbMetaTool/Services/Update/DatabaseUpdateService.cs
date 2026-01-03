@@ -1,5 +1,6 @@
 using DbMetaTool.Models;
 using DbMetaTool.Services.Firebird;
+using DbMetaTool.Services.Metadata;
 using DbMetaTool.Services.SqlScripts;
 using DbMetaTool.Utilities;
 
@@ -241,6 +242,14 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         {
             Console.Write($"  Procedura {procedureName}... ");
             
+            var callingProcedures = ProcedureDependencyValidator.GetCallingProcedures(executor, procedureName);
+            
+            if (callingProcedures.Count > 0)
+            {
+                Console.WriteLine();
+                Console.WriteLine($"    ⚠ Procedura jest wywoływana przez: {string.Join(", ", callingProcedures)}");
+            }
+            
             var sql = ScriptLoader.ReadScriptContent(script);
             
             var statements = SqlScriptParser.ParseScript(sql);
@@ -252,6 +261,8 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
                     executor.ExecuteNonQuery(statement);
                 }
             }
+
+            ValidateProcedureIntegrity(executor, procedureName, callingProcedures);
 
             _changes.Add(new DatabaseChange(
                 ChangeType.ProcedureModified,
@@ -270,6 +281,65 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
             
             throw;
         }
+    }
+
+    private void ValidateProcedureIntegrity(
+        ISqlExecutor executor,
+        string modifiedProcedureName,
+        List<string> callingProcedures)
+    {
+        if (callingProcedures.Count == 0)
+        {
+            Console.WriteLine($"    Brak procedur wywołujących {modifiedProcedureName} - pomijam walidację");
+            return;
+        }
+
+        Console.WriteLine($"    Sprawdzanie integralności BLR i rekompilacja {callingProcedures.Count} procedur wywołujących...");
+        
+        foreach (var procedureName in callingProcedures)
+        {
+            try
+            {
+                Console.Write($"      Próba rekompilacji {procedureName}... ");
+                ProcedureDependencyValidator.RecompileProcedure(executor, procedureName);
+                Console.WriteLine("✓");
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = $"Procedura {procedureName} nie może być automatycznie rekompilowana po zmianie {modifiedProcedureName}: {ex.Message}";
+                
+                Console.WriteLine($"✗ Błąd: {ex.Message}");
+                
+                _changes.Add(new DatabaseChange(
+                    ChangeType.ManualReviewRequired,
+                    procedureName,
+                    errorMessage));
+                
+                throw new InvalidOperationException(
+                    $"Zmiana sygnatury procedury {modifiedProcedureName} spowodowała niespójność. " +
+                    $"Procedura {procedureName} wymaga ręcznej aktualizacji (prawdopodobnie wywołuje {modifiedProcedureName} z nieprawidłową liczbą parametrów). " +
+                    $"Transakcja została wycofana.",
+                    ex);
+            }
+        }
+        
+        var invalidProcedures = ProcedureDependencyValidator.GetInvalidProcedures(executor);
+        
+        if (invalidProcedures.Count > 0)
+        {
+            var stillInvalid = invalidProcedures
+                .Where(p => callingProcedures.Contains(p, StringComparer.OrdinalIgnoreCase) || 
+                           p.Equals(modifiedProcedureName, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            
+            if (stillInvalid.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"Po rekompilacji nadal istnieją nieprawidłowe procedury: {string.Join(", ", stillInvalid)}");
+            }
+        }
+        
+        Console.WriteLine($"    Wszystkie procedury wywołujące zostały pomyślnie zrekompilowane");
     }
 }
 

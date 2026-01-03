@@ -4,6 +4,8 @@ public interface ISqlExecutor
 {
     void ExecuteInTransaction(Action<ISqlExecutor> action);
     
+    void ExecuteInReadOnlyTransaction(Action<ISqlExecutor> action);
+    
     void ExecuteNonQuery(string sql);
     
     void ExecuteScript(string script);
