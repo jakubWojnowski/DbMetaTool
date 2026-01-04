@@ -215,12 +215,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
             .ToList();
         
         _allStatements.AddRange(statements);
-        
-        foreach (var callingProcedure in callingProcedures)
-        {
-            var recompileStatement = $"ALTER PROCEDURE {callingProcedure} RECOMPILE";
-            _allStatements.Add(recompileStatement);
-        }
+   
         
         _changes.Add(new DatabaseChange(
             ChangeType.ProcedureModified,
