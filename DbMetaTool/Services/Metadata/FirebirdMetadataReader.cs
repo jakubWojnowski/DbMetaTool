@@ -327,40 +327,19 @@ public static class FirebirdMetadataReader
                 return null;
             }
             
-            // W Firebird, RDB$FIELD_LENGTH dla VARCHAR w UTF-8 przechowuje długość w bajtach
-            // Dla UTF-8 (character_set_id = 4), jeden znak może zajmować 1-4 bajty
-            // Dla większości przypadków, UTF-8 używa 1-3 bajtów na znak, ale maksymalnie 4
-            // Dla bezpieczeństwa, dzielimy przez maksymalny rozmiar znaku (4 bajty)
-            // Ale dla większości przypadków, UTF-8 używa średnio 1-2 bajtów na znak
-            
-            // Jeśli character_set_id = 4 (UTF8), to dzielimy przez 4 (maksymalny rozmiar znaku)
-            // Jeśli character_set_id = null lub 0 (NONE), to długość jest w bajtach = znakach
-            // Jeśli character_set_id = 3 (UNICODE_FSS), to dzielimy przez 3
-            // Dla innych kodowań, długość jest w znakach
-            
             if (characterSetId == 4) // UTF8
             {
-                // UTF-8: maksymalnie 4 bajty na znak, ale dla większości znaków 1-3 bajty
-                // Dla bezpieczeństwa, dzielimy przez 4, ale to może dać zbyt małe wartości
-                // W rzeczywistości, Firebird dla VARCHAR(200) w UTF-8 przechowuje 200 znaków,
-                // ale RDB$FIELD_LENGTH może być 800 (200 * 4) dla maksymalnego rozmiaru
-                // Ale to nie jest poprawne - Firebird powinien przechowywać rzeczywistą długość w znakach
-                
-                // Sprawdzamy, czy fieldLength jest wielokrotnością 4 - jeśli tak, to prawdopodobnie jest w bajtach
-                // W przeciwnym razie, to jest długość w znakach
+
                 if (fieldLength.Value % 4 == 0 && fieldLength.Value > 0)
                 {
-                    // Prawdopodobnie długość w bajtach - dzielimy przez 4
                     return fieldLength.Value / 4;
                 }
                 
-                // W przeciwnym razie, to jest długość w znakach
                 return fieldLength;
             }
             
-            if (characterSetId == 3) // UNICODE_FSS
+            if (characterSetId == 3)
             {
-                // UNICODE_FSS: maksymalnie 3 bajty na znak
                 if (fieldLength.Value % 3 == 0 && fieldLength.Value > 0)
                 {
                     return fieldLength.Value / 3;
@@ -368,7 +347,6 @@ public static class FirebirdMetadataReader
                 return fieldLength;
             }
             
-            // Dla innych kodowań (NONE, ASCII, etc.), długość jest w znakach
             return fieldLength;
         }
 
@@ -412,7 +390,7 @@ public static class FirebirdMetadataReader
         int? fieldScale,
         int? charLength)
     {
-        var hasNegativeScale = fieldScale.HasValue && fieldScale.Value < 0;
+        var hasNegativeScale = fieldScale is < 0;
         var absoluteScale = hasNegativeScale ? Math.Abs(fieldScale!.Value) : 0;
 
         return fieldType switch

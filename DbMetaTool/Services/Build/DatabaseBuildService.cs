@@ -26,9 +26,13 @@ public static class DatabaseBuildService
 
         DisplayScriptsSummary(scripts);
 
-        ExecuteScripts(databaseFilePath, scripts);
+        var connectionString = FirebirdConnectionFactory.BuildConnectionString(databaseFilePath);
+        var connectionFactory = new FirebirdConnectionFactory(connectionString);
 
+        using var sqlExecutor = new FirebirdSqlExecutor(connectionFactory);
 
+        ExecuteScripts(sqlExecutor, scripts);
+        
         return new BuildResult(
             ExecutedCount: scripts.Count,
             DomainScripts: scripts.Count(s => s.Type == ScriptType.Domain),
@@ -58,15 +62,9 @@ public static class DatabaseBuildService
     }
 
     private static void ExecuteScripts(
-        string databaseFilePath,
+        ISqlExecutor sqlExecutor,
         List<ScriptFile> scripts)
     {
-        var connectionString = FirebirdConnectionFactory.BuildConnectionString(databaseFilePath);
-        
-        var connectionFactory = new FirebirdConnectionFactory(connectionString);
-
-        using var sqlExecutor = new FirebirdSqlExecutor(connectionFactory);
-
         var allStatements = new List<string>();
 
         foreach (var script in scripts)

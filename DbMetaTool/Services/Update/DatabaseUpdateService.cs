@@ -1,7 +1,7 @@
 using DbMetaTool.Models;
 using DbMetaTool.Services.Firebird;
-using DbMetaTool.Services.Metadata;
 using DbMetaTool.Services.SqlScripts;
+using DbMetaTool.Services.Validation;
 using DbMetaTool.Utilities;
 
 namespace DbMetaTool.Services.Update;
@@ -10,6 +10,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
 {
     private readonly List<DatabaseChange> _changes = [];
     private List<DomainMetadata> _existingDomains = [];
+    private readonly List<string> _allStatements = [];
 
     public List<DatabaseChange> GetChanges() => _changes;
 
@@ -20,15 +21,19 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
     {
         _existingDomains = existingDomains;
         
-        ProcessDomains(mainExecutor, scripts, existingDomains);
+        ProcessDomains(scripts, existingDomains);
         
-        ProcessTables(mainExecutor, scripts, existingTables);
+        ProcessTables(scripts, existingTables);
         
-        ProcessProcedures(mainExecutor, scripts);
+        ProcessProcedures(scripts);
+        
+        if (_allStatements.Count > 0)
+        {
+            mainExecutor.ExecuteBatch(_allStatements);
+        }
     }
 
     private void ProcessDomains(
-        ISqlExecutor executor,
         List<ScriptFile> scripts,
         List<DomainMetadata> existingDomains)
     {
@@ -45,7 +50,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
 
             if (!exists)
             {
-                TryCreateDomain(executor, script, domainName);
+                TryCreateDomain(script, domainName);
             }
             else
             {
@@ -57,7 +62,6 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
     }
 
     private void ProcessTables(
-        ISqlExecutor executor,
         List<ScriptFile> scripts,
         List<TableMetadata> existingTables)
     {
@@ -74,13 +78,13 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
 
             if (existingTable == null)
             {
-                TryCreateTable(executor, script, tableName);
+                TryCreateTable(script, tableName);
             }
             else
             {
                 Console.WriteLine($"  Tabela {tableName} istnieje - sprawdzam kolumny...");
                 
-                ProcessTableColumns(executor, script, existingTable);
+                ProcessTableColumns(script, existingTable);
             }
         }
 
@@ -88,7 +92,6 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
     }
 
     private void ProcessProcedures(
-        ISqlExecutor executor,
         List<ScriptFile> scripts)
     {
         Console.WriteLine("=== Przetwarzanie procedur ===");
@@ -99,79 +102,52 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         {
             var procedureName = Path.GetFileNameWithoutExtension(script.FileName);
             
-            TryExecuteProcedureScript(executor, script, procedureName);
+            CollectProcedureStatements(script, procedureName);
         }
 
         Console.WriteLine();
     }
 
-    private void TryCreateDomain(ISqlExecutor executor, ScriptFile script, string domainName)
+    private void TryCreateDomain(ScriptFile script, string domainName)
     {
-        try
-        {
-            Console.Write($"  Tworzenie domeny {domainName}... ");
-            
-            var sql = ScriptLoader.ReadScriptContent(script);
-            
-            var statements = SqlScriptParser.ParseScript(sql)
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .ToList();
+        Console.Write($"  Tworzenie domeny {domainName}... ");
+        
+        var sql = ScriptLoader.ReadScriptContent(script);
+        
+        var statements = SqlScriptParser.ParseScript(sql)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
 
-            executor.ExecuteBatch(statements);
+        _allStatements.AddRange(statements);
 
-            _changes.Add(new DatabaseChange(
-                ChangeType.DomainCreated,
-                domainName,
-                null));
-            Console.WriteLine("✓");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"✗ Błąd: {ex.Message}");
-            
-            _changes.Add(new DatabaseChange(
-                ChangeType.ManualReviewRequired,
-                domainName,
-                $"Błąd tworzenia: {ex.Message}"));
-            throw;
-        }
+        _changes.Add(new DatabaseChange(
+            ChangeType.DomainCreated,
+            domainName,
+            null));
+        Console.WriteLine("✓");
     }
 
-    private void TryCreateTable(ISqlExecutor executor, ScriptFile script, string tableName)
+    private void TryCreateTable(ScriptFile script, string tableName)
     {
-        try
-        {
-            Console.Write($"  Tworzenie tabeli {tableName}... ");
-            
-            var sql = ScriptLoader.ReadScriptContent(script);
-            
-            var statements = SqlScriptParser.ParseScript(sql)
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .ToList();
+        Console.Write($"  Tworzenie tabeli {tableName}... ");
+        
+        var sql = ScriptLoader.ReadScriptContent(script);
+        
+        var statements = SqlScriptParser.ParseScript(sql)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
 
-            executor.ExecuteBatch(statements);
+        _allStatements.AddRange(statements);
 
-            _changes.Add(new DatabaseChange(
-                ChangeType.TableCreated,
-                tableName,
-                null));
-            
-            Console.WriteLine("✓");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"✗ Błąd: {ex.Message}");
-            
-            _changes.Add(new DatabaseChange(
-                ChangeType.ManualReviewRequired,
-                tableName,
-                $"Błąd tworzenia: {ex.Message}"));
-            
-            throw;
-        }
+        _changes.Add(new DatabaseChange(
+            ChangeType.TableCreated,
+            tableName,
+            null));
+        
+        Console.WriteLine("✓");
     }
 
-    private void ProcessTableColumns(ISqlExecutor executor, ScriptFile script, TableMetadata existingTable)
+    private void ProcessTableColumns(ScriptFile script, TableMetadata existingTable)
     {
         var sql = ScriptLoader.ReadScriptContent(script);
         
@@ -201,140 +177,57 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
             }
             else
             {
-                TryAddColumn(executor, statement, existingTable.Name);
+                TryAddColumn(statement, existingTable.Name);
             }
         }
     }
 
-    private void TryAddColumn(ISqlExecutor executor, string statement, string tableName)
+    private void TryAddColumn(string statement, string tableName)
     {
-        try
-        {
-            Console.Write($"    Dodawanie kolumny... ");
-            
-            executor.ExecuteBatch(new List<string> { statement });
+        Console.Write($"    Dodawanie kolumny... ");
+        
+        _allStatements.Add(statement);
 
-            var columnName = ScriptDefinitionParser.ExtractColumnName(statement);
-            
-            _changes.Add(new DatabaseChange(
-                ChangeType.ColumnAdded,
-                $"{tableName}.{columnName}",
-                statement));
-            Console.WriteLine("✓");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"✗ Błąd: {ex.Message}");
-            
-            _changes.Add(new DatabaseChange(
-                ChangeType.ManualReviewRequired,
-                tableName,
-                $"Błąd ALTER: {ex.Message}"));
-            
-            throw;
-        }
+        var columnName = ScriptDefinitionParser.ExtractColumnName(statement);
+        
+        _changes.Add(new DatabaseChange(
+            ChangeType.ColumnAdded,
+            $"{tableName}.{columnName}",
+            statement));
+        Console.WriteLine("✓");
     }
 
-    private void TryExecuteProcedureScript(ISqlExecutor executor, ScriptFile script, string procedureName)
+    private void CollectProcedureStatements(ScriptFile script, string procedureName)
     {
-        try
+        Console.Write($"  Procedura {procedureName}... ");
+        
+        var callingProcedures = ProcedureDependencyValidator.GetCallingProcedures(mainExecutor, procedureName);
+        
+        if (callingProcedures.Count > 0)
         {
-            Console.Write($"  Procedura {procedureName}... ");
-            
-            var callingProcedures = ProcedureDependencyValidator.GetCallingProcedures(executor, procedureName);
-            
-            if (callingProcedures.Count > 0)
-            {
-                Console.WriteLine();
-                Console.WriteLine($"    ⚠ Procedura jest wywoływana przez: {string.Join(", ", callingProcedures)}");
-            }
-            
-            var sql = ScriptLoader.ReadScriptContent(script);
-            
-            var statements = SqlScriptParser.ParseScript(sql)
-                .Where(s => !string.IsNullOrWhiteSpace(s))
-                .ToList();
-
-            executor.ExecuteBatch(statements);
-
-            ValidateProcedureIntegrity(executor, procedureName, callingProcedures);
-
-            _changes.Add(new DatabaseChange(
-                ChangeType.ProcedureModified,
-                procedureName,
-                "Wykonano skrypt"));
-            Console.WriteLine("✓");
+            Console.WriteLine();
+            Console.WriteLine($"    ⚠ Procedura jest wywoływana przez: {string.Join(", ", callingProcedures)}");
         }
-        catch (Exception ex)
+        
+        var sql = ScriptLoader.ReadScriptContent(script);
+        var statements = SqlScriptParser.ParseScript(sql)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
+        
+        _allStatements.AddRange(statements);
+        
+        foreach (var callingProcedure in callingProcedures)
         {
-            Console.WriteLine($"✗ Błąd: {ex.Message}");
-            
-            _changes.Add(new DatabaseChange(
-                ChangeType.ManualReviewRequired,
-                procedureName,
-                $"Błąd: {ex.Message}"));
-            
-            throw;
+            var recompileStatement = $"ALTER PROCEDURE {callingProcedure} RECOMPILE";
+            _allStatements.Add(recompileStatement);
         }
+        
+        _changes.Add(new DatabaseChange(
+            ChangeType.ProcedureModified,
+            procedureName,
+            "Wykonano skrypt"));
+        Console.WriteLine("✓");
     }
 
-    private void ValidateProcedureIntegrity(
-        ISqlExecutor executor,
-        string modifiedProcedureName,
-        List<string> callingProcedures)
-    {
-        if (callingProcedures.Count == 0)
-        {
-            Console.WriteLine($"    Brak procedur wywołujących {modifiedProcedureName} - pomijam walidację");
-            return;
-        }
-
-        Console.WriteLine($"    Sprawdzanie integralności BLR i rekompilacja {callingProcedures.Count} procedur wywołujących...");
-        
-        foreach (var procedureName in callingProcedures)
-        {
-            try
-            {
-                Console.Write($"      Próba rekompilacji {procedureName}... ");
-                ProcedureDependencyValidator.RecompileProcedure(executor, procedureName);
-                Console.WriteLine("✓");
-            }
-            catch (Exception ex)
-            {
-                var errorMessage = $"Procedura {procedureName} nie może być automatycznie rekompilowana po zmianie {modifiedProcedureName}: {ex.Message}";
-                
-                Console.WriteLine($"✗ Błąd: {ex.Message}");
-                
-                _changes.Add(new DatabaseChange(
-                    ChangeType.ManualReviewRequired,
-                    procedureName,
-                    errorMessage));
-                
-                throw new InvalidOperationException(
-                    $"Zmiana sygnatury procedury {modifiedProcedureName} spowodowała niespójność. " +
-                    $"Procedura {procedureName} wymaga ręcznej aktualizacji (prawdopodobnie wywołuje {modifiedProcedureName} z nieprawidłową liczbą parametrów). " +
-                    $"Transakcja została wycofana.",
-                    ex);
-            }
-        }
-        
-        var invalidProcedures = ProcedureDependencyValidator.GetInvalidProcedures(executor);
-        
-        if (invalidProcedures.Count > 0)
-        {
-            var stillInvalid = invalidProcedures
-                .Where(p => callingProcedures.Contains(p, StringComparer.OrdinalIgnoreCase) || 
-                           p.Equals(modifiedProcedureName, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-            
-            if (stillInvalid.Count > 0)
-            {
-                throw new InvalidOperationException(
-                    $"Po rekompilacji nadal istnieją nieprawidłowe procedury: {string.Join(", ", stillInvalid)}");
-            }
-        }
-        
-        Console.WriteLine($"    Wszystkie procedury wywołujące zostały pomyślnie zrekompilowane");
-    }
 }
 

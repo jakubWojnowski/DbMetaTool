@@ -28,7 +28,7 @@ public class FirebirdSqlExecutor
             _readTransaction = null;
         }
 
-        var options = new FbTransactionOptions()
+        var options = new FbTransactionOptions
         {
             TransactionBehavior = FbTransactionBehavior.Concurrency | 
                                   FbTransactionBehavior.Wait,
@@ -71,7 +71,7 @@ public class FirebirdSqlExecutor
 
         if (_readTransaction == null)
         {
-            var options = new FbTransactionOptions()
+            var options = new FbTransactionOptions
             {
                 TransactionBehavior = FbTransactionBehavior.Concurrency | 
                                       FbTransactionBehavior.Wait | 
