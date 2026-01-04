@@ -15,7 +15,7 @@ public static class ProcedureDependencyValidator
         sql.AppendLine("  AND RDB$DEPENDED_ON_TYPE = 5");
         sql.AppendLine("ORDER BY RDB$DEPENDENT_NAME");
 
-        return executor.ExecuteQuery(sql.ToString(), reader => 
+        return executor.ExecuteRead(sql.ToString(), reader => 
             reader["RDB$DEPENDENT_NAME"].ToString()!.Trim());
     }
 
@@ -30,7 +30,7 @@ public static class ProcedureDependencyValidator
         sql.AppendLine("  AND RDB$DEPENDENT_TYPE = 5");
         sql.AppendLine("ORDER BY RDB$DEPENDENT_NAME");
 
-        return executor.ExecuteQuery(sql.ToString(), reader => 
+        return executor.ExecuteRead(sql.ToString(), reader => 
             reader["RDB$DEPENDENT_NAME"].ToString()!.Trim());
     }
 
@@ -44,14 +44,14 @@ public static class ProcedureDependencyValidator
         sql.AppendLine("  AND RDB$SYSTEM_FLAG = 0");
         sql.AppendLine("ORDER BY RDB$PROCEDURE_NAME");
 
-        return executor.ExecuteQuery(sql.ToString(), reader => 
+        return executor.ExecuteRead(sql.ToString(), reader => 
             reader["RDB$PROCEDURE_NAME"].ToString()!.Trim());
     }
 
     public static void RecompileProcedure(ISqlExecutor executor, string procedureName)
     {
         var sql = $"ALTER PROCEDURE {procedureName} RECOMPILE";
-        executor.ExecuteNonQuery(sql);
+        executor.ExecuteBatch(new List<string> { sql });
     }
 }
 

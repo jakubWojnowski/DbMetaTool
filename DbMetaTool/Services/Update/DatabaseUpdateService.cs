@@ -9,6 +9,7 @@ namespace DbMetaTool.Services.Update;
 public class DatabaseUpdateService(ISqlExecutor mainExecutor)
 {
     private readonly List<DatabaseChange> _changes = [];
+    private List<DomainMetadata> _existingDomains = [];
 
     public List<DatabaseChange> GetChanges() => _changes;
 
@@ -17,14 +18,13 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         List<DomainMetadata> existingDomains,
         List<TableMetadata> existingTables)
     {
-        mainExecutor.ExecuteInTransaction(executor =>
-        {
-            ProcessDomains(executor, scripts, existingDomains);
-            
-            ProcessTables(executor, scripts, existingTables);
-            
-            ProcessProcedures(executor, scripts);
-        });
+        _existingDomains = existingDomains;
+        
+        ProcessDomains(mainExecutor, scripts, existingDomains);
+        
+        ProcessTables(mainExecutor, scripts, existingTables);
+        
+        ProcessProcedures(mainExecutor, scripts);
     }
 
     private void ProcessDomains(
@@ -113,12 +113,11 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
             
             var sql = ScriptLoader.ReadScriptContent(script);
             
-            var statements = SqlScriptParser.ParseScript(sql);
+            var statements = SqlScriptParser.ParseScript(sql)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
 
-            foreach (var statement in statements)
-            {
-                executor.ExecuteNonQuery(statement);
-            }
+            executor.ExecuteBatch(statements);
 
             _changes.Add(new DatabaseChange(
                 ChangeType.DomainCreated,
@@ -146,12 +145,11 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
             
             var sql = ScriptLoader.ReadScriptContent(script);
             
-            var statements = SqlScriptParser.ParseScript(sql);
+            var statements = SqlScriptParser.ParseScript(sql)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
 
-            foreach (var statement in statements)
-            {
-                executor.ExecuteNonQuery(statement);
-            }
+            executor.ExecuteBatch(statements);
 
             _changes.Add(new DatabaseChange(
                 ChangeType.TableCreated,
@@ -187,7 +185,8 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
 
         var alterStatements = DatabaseSchemaComparer.GenerateAlterStatements(
             existingTable,
-            desiredTable);
+            desiredTable,
+            _existingDomains);
 
         foreach (var statement in alterStatements)
         {
@@ -213,7 +212,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         {
             Console.Write($"    Dodawanie kolumny... ");
             
-            executor.ExecuteNonQuery(statement);
+            executor.ExecuteBatch(new List<string> { statement });
 
             var columnName = ScriptDefinitionParser.ExtractColumnName(statement);
             
@@ -252,15 +251,11 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
             
             var sql = ScriptLoader.ReadScriptContent(script);
             
-            var statements = SqlScriptParser.ParseScript(sql);
+            var statements = SqlScriptParser.ParseScript(sql)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
 
-            foreach (var statement in statements)
-            {
-                if (!string.IsNullOrWhiteSpace(statement))
-                {
-                    executor.ExecuteNonQuery(statement);
-                }
-            }
+            executor.ExecuteBatch(statements);
 
             ValidateProcedureIntegrity(executor, procedureName, callingProcedures);
 

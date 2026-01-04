@@ -22,18 +22,11 @@ public static class MetadataExportService
 
         Console.WriteLine("Pobieranie metadanych (spójny snapshot)...");
         
-        var domains = new List<DomainMetadata>();
-        var tables = new List<TableMetadata>();
-        var procedures = new List<ProcedureMetadata>();
+        var domains = ReadDomains(executor);
         
-        executor.ExecuteInReadOnlyTransaction(readOnlyExecutor =>
-        {
-            domains = ReadDomains(readOnlyExecutor);
-            
-            tables = ReadTables(readOnlyExecutor);
-            
-            procedures = ReadProcedures(readOnlyExecutor);
-        });
+        var tables = ReadTables(executor);
+        
+        var procedures = ReadProcedures(executor);
 
         Console.WriteLine();
         Console.WriteLine("Generowanie skryptów SQL...");

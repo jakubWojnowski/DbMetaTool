@@ -11,17 +11,13 @@ public class DatabaseUpdateServiceTests
 {
     private ISqlExecutor _mockExecutor = null!;
     private DatabaseUpdateService _service = null!;
-    private ISqlExecutor _transactionExecutor = null!;
     private SqlScriptHelper _scriptHelper = null!;
 
     [SetUp]
     public void SetUp()
     {
         _mockExecutor = Substitute.For<ISqlExecutor>();
-        _transactionExecutor = Substitute.For<ISqlExecutor>();
         _scriptHelper = new SqlScriptHelper();
-        
-        ConfigureTransactionMock();
 
         _service = new DatabaseUpdateService(_mockExecutor);
     }
@@ -30,17 +26,6 @@ public class DatabaseUpdateServiceTests
     public void TearDown()
     {
         _scriptHelper?.Dispose();
-    }
-
-    private void ConfigureTransactionMock()
-    {
-        _mockExecutor
-            .When(x => x.ExecuteInTransaction(Arg.Any<Action<ISqlExecutor>>()))
-            .Do(callInfo =>
-            {
-                var action = callInfo.Arg<Action<ISqlExecutor>>();
-                action(_transactionExecutor);
-            });
     }
 
     #region ProcessUpdate Tests
@@ -58,22 +43,6 @@ public class DatabaseUpdateServiceTests
 
         // Assert
         Assert.That(_service.GetChanges(), Is.Empty);
-        _mockExecutor.Received(1).ExecuteInTransaction(Arg.Any<Action<ISqlExecutor>>());
-    }
-
-    [Test]
-    public void ProcessUpdate_ExecutesInTransaction()
-    {
-        // Arrange
-        var scripts = new List<ScriptFile>();
-        var domains = new List<DomainMetadata>();
-        var tables = new List<TableMetadata>();
-
-        // Act
-        _service.ProcessUpdate(scripts, domains, tables);
-
-        // Assert
-        _mockExecutor.Received(1).ExecuteInTransaction(Arg.Any<Action<ISqlExecutor>>());
     }
 
     #endregion
@@ -96,7 +65,8 @@ public class DatabaseUpdateServiceTests
 
         // Assert
         var containsDomainCreate = Arg.Is<string>(s => s.Contains("CREATE DOMAIN"));
-        _transactionExecutor.Received(1).ExecuteNonQuery(containsDomainCreate);
+        _mockExecutor.Received(1).ExecuteBatch(Arg.Is<List<string>>(list => 
+            list.Any(s => s.Contains("CREATE DOMAIN"))));
         
         var changes = _service.GetChanges();
         Assert.That(changes, Has.Count.EqualTo(1));
@@ -122,7 +92,7 @@ public class DatabaseUpdateServiceTests
         _service.ProcessUpdate(scripts, existingDomains, existingTables);
 
         // Assert
-        _transactionExecutor.DidNotReceive().ExecuteNonQuery(Arg.Any<string>());
+        _mockExecutor.DidNotReceive().ExecuteBatch(Arg.Any<List<string>>());
         Assert.That(_service.GetChanges(), Is.Empty);
     }
 
@@ -137,8 +107,8 @@ public class DatabaseUpdateServiceTests
         var existingDomains = new List<DomainMetadata>();
         var existingTables = new List<TableMetadata>();
 
-        _transactionExecutor
-            .When(x => x.ExecuteNonQuery(Arg.Any<string>()))
+        _mockExecutor
+            .When(x => x.ExecuteBatch(Arg.Any<List<string>>()))
             .Do(x => throw new Exception("Database error"));
 
         // Act & Assert
@@ -174,7 +144,8 @@ public class DatabaseUpdateServiceTests
 
         // Assert
         var containsTableCreate = Arg.Is<string>(s => s.Contains("CREATE TABLE"));
-        _transactionExecutor.Received().ExecuteNonQuery(containsTableCreate);
+        _mockExecutor.Received().ExecuteBatch(Arg.Is<List<string>>(list => 
+            list.Any(s => s.Contains("CREATE TABLE"))));
         
         var changes = _service.GetChanges();
         Assert.That(changes, Has.Count.EqualTo(1));
@@ -211,7 +182,8 @@ public class DatabaseUpdateServiceTests
             s.Contains("ALTER TABLE") && 
             s.Contains("ADD") && 
             s.Contains("EMAIL"));
-        _transactionExecutor.Received().ExecuteNonQuery(containsAlterAdd);
+        _mockExecutor.Received().ExecuteBatch(Arg.Is<List<string>>(list => 
+            list.Any(s => s.Contains("ALTER TABLE") && s.Contains("ADD"))));
         
         var changes = _service.GetChanges();
         var columnAdded = changes.FirstOrDefault(c => c.Type == ChangeType.ColumnAdded);
@@ -231,8 +203,8 @@ public class DatabaseUpdateServiceTests
         var existingDomains = new List<DomainMetadata>();
         var existingTables = new List<TableMetadata>();
 
-        _transactionExecutor
-            .When(x => x.ExecuteNonQuery(Arg.Any<string>()))
+        _mockExecutor
+            .When(x => x.ExecuteBatch(Arg.Any<List<string>>()))
             .Do(x => throw new Exception("Table creation failed"));
 
         // Act & Assert
@@ -267,7 +239,7 @@ public class DatabaseUpdateServiceTests
         _service.ProcessUpdate(scripts, existingDomains, existingTables);
 
         // Assert
-        _transactionExecutor.Received().ExecuteNonQuery(Arg.Any<string>());
+        _mockExecutor.Received().ExecuteBatch(Arg.Any<List<string>>());
         
         var changes = _service.GetChanges();
         Assert.That(changes, Has.Count.EqualTo(1));
@@ -286,8 +258,8 @@ public class DatabaseUpdateServiceTests
         var existingDomains = new List<DomainMetadata>();
         var existingTables = new List<TableMetadata>();
 
-        _transactionExecutor
-            .When(x => x.ExecuteNonQuery(Arg.Any<string>()))
+        _mockExecutor
+            .When(x => x.ExecuteBatch(Arg.Any<List<string>>()))
             .Do(x => throw new Exception("Procedure error"));
 
         // Act & Assert
@@ -395,7 +367,7 @@ public class DatabaseUpdateServiceTests
         _service.ProcessUpdate(scripts, existingDomains, new List<TableMetadata>());
 
         // Assert
-        _transactionExecutor.DidNotReceive().ExecuteNonQuery(Arg.Any<string>());
+        _mockExecutor.DidNotReceive().ExecuteBatch(Arg.Any<List<string>>());
         Assert.That(_service.GetChanges(), Is.Empty);
     }
 
@@ -419,7 +391,8 @@ public class DatabaseUpdateServiceTests
 
         // Assert - tabela nie powinna być tworzona ponownie
         var containsCreateTable = Arg.Is<string>(s => s.Contains("CREATE TABLE"));
-        _transactionExecutor.DidNotReceive().ExecuteNonQuery(containsCreateTable);
+        _mockExecutor.DidNotReceive().ExecuteBatch(Arg.Is<List<string>>(list => 
+            list.Any(s => s.Contains("CREATE TABLE"))));
     }
 
     #endregion

@@ -80,13 +80,15 @@ public static class ScriptDefinitionParser
         
         var isNullable = notNullIndex < 0;
 
+        var (precision, scale, length) = ParseDataTypeParameters(dataType);
+
         return new ColumnMetadata(
             Position: position,
             Name: name,
             DataType: dataType,
-            Length: null,
-            Precision: null,
-            Scale: null,
+            Length: length,
+            Precision: precision,
+            Scale: scale,
             IsNullable: isNullable,
             DefaultValue: null,
             DomainName: null);
@@ -104,6 +106,55 @@ public static class ScriptDefinitionParser
         }
 
         return "UNKNOWN";
+    }
+
+    private static (int? Precision, int? Scale, int? Length) ParseDataTypeParameters(string dataType)
+    {
+        var openParenIndex = dataType.IndexOf('(');
+        
+        if (openParenIndex < 0)
+        {
+            return (null, null, null);
+        }
+
+        var closeParenIndex = dataType.IndexOf(')', openParenIndex);
+        
+        if (closeParenIndex < 0)
+        {
+            return (null, null, null);
+        }
+
+        var parameters = dataType.Substring(openParenIndex + 1, closeParenIndex - openParenIndex - 1)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Trim())
+            .ToArray();
+
+        var baseType = dataType[..openParenIndex].Trim().ToUpperInvariant();
+
+        if (baseType == "DECIMAL" || baseType == "NUMERIC")
+        {
+            if (parameters.Length >= 2)
+            {
+                if (int.TryParse(parameters[0], out var precision) &&
+                    int.TryParse(parameters[1], out var scale))
+                {
+                    return (precision, scale, null);
+                }
+            }
+        }
+        
+        else if (baseType == "VARCHAR" || baseType == "CHAR")
+        {
+            if (parameters.Length >= 1)
+            {
+                if (int.TryParse(parameters[0], out var length))
+                {
+                    return (null, null, length);
+                }
+            }
+        }
+
+        return (null, null, null);
     }
 }
 

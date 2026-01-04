@@ -2,14 +2,8 @@ namespace DbMetaTool.Services.Firebird;
 
 public interface ISqlExecutor
 {
-    void ExecuteInTransaction(Action<ISqlExecutor> action);
+    void ExecuteBatch(List<string> sqlStatements);
     
-    void ExecuteInReadOnlyTransaction(Action<ISqlExecutor> action);
-    
-    void ExecuteNonQuery(string sql);
-    
-    void ExecuteScript(string script);
-
-    List<T> ExecuteQuery<T>(string sql, Func<System.Data.IDataReader, T> mapper);
+    List<T> ExecuteRead<T>(string sql, Func<System.Data.IDataReader, T> mapper);
 }
 

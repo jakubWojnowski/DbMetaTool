@@ -1,5 +1,4 @@
 using DbMetaTool.Firebird;
-using DbMetaTool.Utilities;
 using FirebirdSql.Data.FirebirdClient;
 
 namespace DbMetaTool.Services.Firebird;
@@ -10,15 +9,24 @@ public class FirebirdSqlExecutor
 ) : ISqlExecutor, IDisposable
 {
     private FbConnection? _connection;
-    private FbTransaction? _transaction;
+    private FbTransaction? _readTransaction;
     private bool _disposed;
 
-    public void ExecuteInTransaction(Action<ISqlExecutor> action)
+    public void ExecuteBatch(List<string> sqlStatements)
     {
-        if (action == null)
-            throw new ArgumentNullException(nameof(action));
+        if (sqlStatements == null)
+            throw new ArgumentNullException(nameof(sqlStatements));
+
+        if (sqlStatements.Count == 0)
+            return;
 
         EnsureConnection();
+        
+        if (_readTransaction != null)
+        {
+            _readTransaction.Dispose();
+            _readTransaction = null;
+        }
 
         var options = new FbTransactionOptions()
         {
@@ -28,12 +36,20 @@ public class FirebirdSqlExecutor
         };
 
         using var transaction = _connection!.BeginTransaction(options);
-        
-        _transaction = transaction;
 
         try
         {
-            action(this);
+            foreach (var sql in sqlStatements)
+            {
+                if (string.IsNullOrWhiteSpace(sql))
+                    continue;
+
+                using var command = _connection.CreateCommand();
+                command.Transaction = transaction;
+                command.CommandText = sql;
+                command.ExecuteNonQuery();
+            }
+            
             transaction.Commit();
         }
         catch
@@ -41,73 +57,9 @@ public class FirebirdSqlExecutor
             transaction.Rollback();
             throw;
         }
-        finally
-        {
-            _transaction = null;
-        }
     }
 
-    public void ExecuteInReadOnlyTransaction(Action<ISqlExecutor> action)
-    {
-        if (action == null)
-            throw new ArgumentNullException(nameof(action));
-
-        EnsureConnection();
-
-        var options = new FbTransactionOptions()
-        {
-            TransactionBehavior = FbTransactionBehavior.Concurrency | 
-                                  FbTransactionBehavior.Wait | 
-                                  FbTransactionBehavior.Read
-        };
-
-        using var transaction = _connection!.BeginTransaction(options);
-        
-        _transaction = transaction;
-
-        try
-        {
-            action(this);
-        }
-        finally
-        {
-            _transaction = null;
-        }
-    }
-
-    public void ExecuteNonQuery(string sql)
-    {
-        if (string.IsNullOrWhiteSpace(sql))
-            throw new ArgumentException("SQL cannot be empty", nameof(sql));
-
-        EnsureConnection();
-
-        using var command = _connection!.CreateCommand();
-
-        command.Transaction = _transaction;
-
-        command.CommandText = sql;
-
-        command.ExecuteNonQuery();
-    }
-
-    public void ExecuteScript(string script)
-    {
-        if (string.IsNullOrWhiteSpace(script))
-            throw new ArgumentException("Script cannot be empty", nameof(script));
-
-        var statements = SqlScriptParser.ParseScript(script);
-
-        foreach (var statement in statements)
-        {
-            if (!string.IsNullOrWhiteSpace(statement))
-            {
-                ExecuteNonQuery(statement);
-            }
-        }
-    }
-
-    public List<T> ExecuteQuery<T>(string sql, Func<System.Data.IDataReader, T> mapper)
+    public List<T> ExecuteRead<T>(string sql, Func<System.Data.IDataReader, T> mapper)
     {
         if (string.IsNullOrWhiteSpace(sql))
             throw new ArgumentException("SQL cannot be empty", nameof(sql));
@@ -117,12 +69,22 @@ public class FirebirdSqlExecutor
 
         EnsureConnection();
 
+        if (_readTransaction == null)
+        {
+            var options = new FbTransactionOptions()
+            {
+                TransactionBehavior = FbTransactionBehavior.Concurrency | 
+                                      FbTransactionBehavior.Wait | 
+                                      FbTransactionBehavior.Read
+            };
+
+            _readTransaction = _connection!.BeginTransaction(options);
+        }
+
         var results = new List<T>();
 
         using var command = _connection!.CreateCommand();
-
-        command.Transaction = _transaction;
-
+        command.Transaction = _readTransaction;
         command.CommandText = sql;
 
         using var reader = command.ExecuteReader();
@@ -150,12 +112,10 @@ public class FirebirdSqlExecutor
     {
         if (_disposed)
             return;
-
-        _transaction?.Dispose();
         
+        _readTransaction?.Dispose();
         _connection?.Dispose();
 
         _disposed = true;
     }
 }
-

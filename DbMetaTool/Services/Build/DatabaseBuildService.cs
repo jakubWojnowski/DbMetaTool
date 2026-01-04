@@ -3,6 +3,7 @@ using DbMetaTool.Models;
 using DbMetaTool.Models.results;
 using DbMetaTool.Services.Firebird;
 using DbMetaTool.Services.SqlScripts;
+using DbMetaTool.Utilities;
 
 namespace DbMetaTool.Services.Build;
 
@@ -66,18 +67,26 @@ public static class DatabaseBuildService
 
         using var sqlExecutor = new FirebirdSqlExecutor(connectionFactory);
 
-        sqlExecutor.ExecuteInTransaction(executor =>
+        var allStatements = new List<string>();
+
+        foreach (var script in scripts)
         {
-            foreach (var script in scripts)
-            {
-                Console.Write($"Wykonywanie: {script.Type}/{script.FileName}... ");
+            Console.Write($"Wykonywanie: {script.Type}/{script.FileName}... ");
 
-                var sql = ScriptLoader.ReadScriptContent(script);
-                
-                executor.ExecuteScript(sql);
+            var sql = ScriptLoader.ReadScriptContent(script);
+            
+            var statements = SqlScriptParser.ParseScript(sql)
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .ToList();
+            
+            allStatements.AddRange(statements);
 
-                Console.WriteLine("✓");
-            }
-        });
+            Console.WriteLine("✓");
+        }
+
+        if (allStatements.Count > 0)
+        {
+            sqlExecutor.ExecuteBatch(allStatements);
+        }
     }
 }
