@@ -327,7 +327,7 @@ public static class FirebirdMetadataReader
                 return null;
             }
             
-            if (characterSetId == 4) // UTF8
+            if (characterSetId == 4)
             {
 
                 if (fieldLength.Value % 4 == 0 && fieldLength.Value > 0)

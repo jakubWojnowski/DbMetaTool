@@ -55,4 +55,9 @@ public static class TestDataBuilder
     {
         return CreateColumn(name, $"VARCHAR({length})", position, isNullable, length);
     }
+
+    public static ProcedureMetadata CreateProcedure(string name, string? source = null)
+    {
+        return new ProcedureMetadata(name, source);
+    }
 }

@@ -44,6 +44,31 @@ public static class SqlTemplates
         return sb.ToString();
     }
 
+    public static string CreateTableColumnsOnly(params string[] columnDefinitions)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine("(");
+        
+        for (var i = 0; i < columnDefinitions.Length; i++)
+        {
+            sb.Append("    ");
+            sb.Append(columnDefinitions[i]);
+            
+            if (i < columnDefinitions.Length - 1)
+            {
+                sb.AppendLine(",");
+            }
+            else
+            {
+                sb.AppendLine();
+            }
+        }
+        
+        sb.Append(");");
+        
+        return sb.ToString();
+    }
+
     public static string CreateSimpleProcedure(string procedureName, string body = "BEGIN END")
     {
         var sb = new StringBuilder();

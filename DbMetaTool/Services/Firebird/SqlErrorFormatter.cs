@@ -59,44 +59,6 @@ public static class SqlErrorFormatter
         return sb.ToString();
     }
 
-    public static string FormatSqlError(Exception ex, string sql, int statementIndex)
-    {
-        var sqlPreview = GetSqlPreview(sql, 200);
-        var statementType = DetectStatementType(sql);
-        
-        var sb = new System.Text.StringBuilder();
-        if (!string.IsNullOrEmpty(statementType))
-        {
-            sb.AppendLine($"Błąd wykonania {statementType} (statement #{statementIndex}):");
-        }
-        else
-        {
-            sb.AppendLine($"Błąd wykonania statement #{statementIndex}:");
-        }
-        sb.AppendLine();
-        sb.AppendLine(ex.Message);
-        
-        if (ex.InnerException != null)
-        {
-            sb.AppendLine();
-            sb.AppendLine($"Szczegóły: {ex.InnerException.Message}");
-        }
-        
-        if (sql.Length <= 300)
-        {
-            sb.AppendLine();
-            sb.AppendLine("SQL:");
-            sb.AppendLine(sqlPreview);
-        }
-        else
-        {
-            sb.AppendLine();
-            sb.AppendLine($"SQL: {sqlPreview}... (pełny SQL ma {sql.Length} znaków)");
-        }
-        
-        return sb.ToString();
-    }
-
     public static string FormatValidationError(List<string> invalidProcedures)
     {
         var sb = new System.Text.StringBuilder();
