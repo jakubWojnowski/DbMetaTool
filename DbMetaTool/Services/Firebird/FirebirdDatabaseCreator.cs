@@ -24,7 +24,34 @@ public static class FirebirdDatabaseCreator
             Dialect = 3
         };
 
-       FbConnection.CreateDatabase(connectionStringBuilder.ToString(), overwrite: false);
+        var connectionString = connectionStringBuilder.ToString();
+
+        if (DatabaseExists(connectionString))
+        {
+            throw new InvalidOperationException($"Baza danych '{databasePath}' już istnieje.");
+        }
+
+        FbConnection.CreateDatabase(connectionString, overwrite: false);
+    }
+
+    private static bool DatabaseExists(string connectionString)
+    {
+        try
+        {
+            using var connection = new FbConnection(connectionString);
+            
+            connection.Open();
+            
+            return true;
+        }
+        catch (FbException)
+        {
+            return false;
+        }
+        catch
+        {
+            return false;
+        }
     }
 }
 
