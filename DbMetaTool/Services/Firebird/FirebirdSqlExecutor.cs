@@ -39,15 +39,32 @@ public class FirebirdSqlExecutor
 
         try
         {
+            var statementIndex = 0;
             foreach (var sql in sqlStatements)
             {
                 if (string.IsNullOrWhiteSpace(sql))
                     continue;
 
+                statementIndex++;
+                
                 using var command = _connection.CreateCommand();
                 command.Transaction = transaction;
                 command.CommandText = sql;
-                command.ExecuteNonQuery();
+                
+                try
+                {
+                    command.ExecuteNonQuery();
+                }
+                catch (FbException fbEx)
+                {
+                    var errorDetails = SqlErrorFormatter.FormatFirebirdError(fbEx, sql, statementIndex);
+                    throw new InvalidOperationException(errorDetails, fbEx);
+                }
+                catch (Exception ex)
+                {
+                    var errorDetails = SqlErrorFormatter.FormatGenericError(ex, sql, statementIndex);
+                    throw new InvalidOperationException(errorDetails, ex);
+                }
             }
             
             transaction.Commit();
@@ -87,10 +104,23 @@ public class FirebirdSqlExecutor
         command.Transaction = _readTransaction;
         command.CommandText = sql;
 
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
+        try
         {
-            results.Add(mapper(reader));
+            using var reader = command.ExecuteReader();
+            while (reader.Read())
+            {
+                results.Add(mapper(reader));
+            }
+        }
+        catch (FbException fbEx)
+        {
+            var errorDetails = SqlErrorFormatter.FormatFirebirdError(fbEx, sql, 0);
+            throw new InvalidOperationException(errorDetails, fbEx);
+        }
+        catch (Exception ex)
+        {
+            var errorDetails = SqlErrorFormatter.FormatGenericError(ex, sql, 0);
+            throw new InvalidOperationException(errorDetails, ex);
         }
 
         return results;
