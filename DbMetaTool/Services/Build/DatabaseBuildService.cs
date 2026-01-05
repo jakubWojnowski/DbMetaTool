@@ -14,7 +14,8 @@ public static class DatabaseBuildService
     {
         CreateEmptyDatabase(databaseFilePath);
 
-        var scripts = LoadScripts(scriptsDirectory);
+        var scripts = ScriptLoader.LoadScriptsInOrder(scriptsDirectory);
+        
         if (scripts.Count == 0)
         {
             Console.WriteLine("⚠ Nie znaleziono żadnych skryptów do wykonania");
@@ -28,6 +29,7 @@ public static class DatabaseBuildService
         DisplayScriptsSummary(scripts);
 
         var connectionString = FirebirdConnectionFactory.BuildConnectionString(databaseFilePath);
+        
         var connectionFactory = new FirebirdConnectionFactory(connectionString);
 
         using var sqlExecutor = new FirebirdSqlExecutor(connectionFactory);
@@ -46,11 +48,6 @@ public static class DatabaseBuildService
         FirebirdDatabaseCreator.CreateDatabase(databaseFilePath);
         
         Console.WriteLine("✓ Utworzono pustą bazę danych");
-    }
-
-    private static List<ScriptFile> LoadScripts(string scriptsDirectory)
-    {
-        return ScriptLoader.LoadScriptsInOrder(scriptsDirectory);
     }
 
     private static void DisplayScriptsSummary(List<ScriptFile> scripts)

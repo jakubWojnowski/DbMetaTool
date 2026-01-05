@@ -17,7 +17,8 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
     public void ProcessUpdate(
         List<ScriptFile> scripts,
         List<DomainMetadata> existingDomains,
-        List<TableMetadata> existingTables)
+        List<TableMetadata> existingTables,
+        List<ProcedureMetadata> existingProcedures)
     {
         _existingDomains = existingDomains;
         
@@ -25,7 +26,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         
         ProcessTables(scripts, existingTables);
         
-        ProcessProcedures(scripts);
+        ProcessProcedures(scripts, existingProcedures);
         
         if (_allStatements.Count > 0)
         {
@@ -82,9 +83,17 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
             }
             else
             {
-                Console.WriteLine($"  Tabela {tableName} istnieje - sprawdzam kolumny...");
-                
-                ProcessTableColumns(script, existingTable);
+                var sql = ScriptLoader.ReadScriptContent(script);
+                if (HasCreateStatement(sql))
+                {
+                    Console.WriteLine($"  Tabela {tableName} już istnieje - pomijam skrypt CREATE");
+                }
+                else
+                {
+                    Console.WriteLine($"  Tabela {tableName} istnieje - sprawdzam kolumny...");
+                    
+                    ProcessTableColumns(script, existingTable);
+                }
             }
         }
 
@@ -92,7 +101,8 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
     }
 
     private void ProcessProcedures(
-        List<ScriptFile> scripts)
+        List<ScriptFile> scripts,
+        List<ProcedureMetadata> existingProcedures)
     {
         Console.WriteLine("=== Przetwarzanie procedur ===");
 
@@ -101,6 +111,19 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         foreach (var script in procedureScripts)
         {
             var procedureName = Path.GetFileNameWithoutExtension(script.FileName);
+            
+            var existingProcedure = existingProcedures.FirstOrDefault(p =>
+                p.Name.Equals(procedureName, StringComparison.OrdinalIgnoreCase));
+
+            if (existingProcedure != null)
+            {
+                var sql = ScriptLoader.ReadScriptContent(script);
+                if (HasCreateStatement(sql))
+                {
+                    Console.WriteLine($"  Procedura {procedureName} już istnieje - pomijam skrypt CREATE");
+                    continue;
+                }
+            }
             
             CollectProcedureStatements(script, procedureName);
         }
@@ -222,6 +245,20 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
             procedureName,
             "Wykonano skrypt"));
         Console.WriteLine("✓");
+    }
+
+    private static bool HasCreateStatement(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return false;
+        }
+
+        var upperSql = sql.ToUpperInvariant();
+        
+        return upperSql.Contains("CREATE PROCEDURE", StringComparison.OrdinalIgnoreCase) ||
+               upperSql.Contains("CREATE TABLE", StringComparison.OrdinalIgnoreCase) ||
+               upperSql.Contains("CREATE DOMAIN", StringComparison.OrdinalIgnoreCase);
     }
 
 }
