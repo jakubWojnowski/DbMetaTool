@@ -263,7 +263,7 @@ public class BuildDatabaseTests
         // Act
         var scripts = ScriptLoader.LoadScriptsInOrder(_scriptsDirectory);
 
-        // Assert - w Chicago School testujemy zachowanie: kolejność powinna być: domeny, tabele, procedury
+        // Assert 
         Assert.That(scripts, Has.Count.EqualTo(3), "Powinno być 3 skrypty");
         Assert.That(scripts[0].Type, Is.EqualTo(ScriptType.Domain), "Pierwszy powinien być domain");
         Assert.That(scripts[1].Type, Is.EqualTo(ScriptType.Table), "Drugi powinien być table");
