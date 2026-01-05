@@ -3,6 +3,7 @@ using DbMetaTool.Models;
 using DbMetaTool.Models.results;
 using DbMetaTool.Services.Firebird;
 using DbMetaTool.Services.SqlScripts;
+using DbMetaTool.Services.Validation;
 using DbMetaTool.Utilities;
 
 namespace DbMetaTool.Services.Build;
@@ -84,7 +85,7 @@ public static class DatabaseBuildService
 
         if (allStatements.Count > 0)
         {
-            sqlExecutor.ExecuteBatch(allStatements);
+            sqlExecutor.ExecuteBatch(allStatements, ProcedureBlrValidator.ValidateProcedureIntegrity);
         }
     }
 }

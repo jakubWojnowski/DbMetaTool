@@ -29,7 +29,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         
         if (_allStatements.Count > 0)
         {
-            mainExecutor.ExecuteBatch(_allStatements);
+            mainExecutor.ExecuteBatch(_allStatements, ProcedureBlrValidator.ValidateProcedureIntegrity);
         }
     }
 

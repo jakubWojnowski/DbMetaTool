@@ -10,11 +10,12 @@ public class FirebirdSqlExecutor
 {
     private FbConnection? _connection;
     private FbTransaction? _readTransaction;
+    private FbTransaction? _currentWriteTransaction;
     private bool _disposed;
 
-    public void ExecuteBatch(List<string> sqlStatements)
+    public void ExecuteBatch(List<string> sqlStatements, Action<ISqlExecutor>? validationCallback = null)
     {
-        if (sqlStatements == null)
+        if (sqlStatements is null)
             throw new ArgumentNullException(nameof(sqlStatements));
 
         if (sqlStatements.Count == 0)
@@ -25,6 +26,7 @@ public class FirebirdSqlExecutor
         if (_readTransaction != null)
         {
             _readTransaction.Dispose();
+            
             _readTransaction = null;
         }
 
@@ -39,16 +41,17 @@ public class FirebirdSqlExecutor
 
         try
         {
-            var statementIndex = 0;
-            foreach (var sql in sqlStatements)
-            {
-                if (string.IsNullOrWhiteSpace(sql))
-                    continue;
+            _currentWriteTransaction = transaction;
 
+            var statementIndex = 0;
+            foreach (var sql in sqlStatements.Where(sql => !string.IsNullOrWhiteSpace(sql)))
+            {
                 statementIndex++;
                 
                 using var command = _connection.CreateCommand();
+                
                 command.Transaction = transaction;
+                
                 command.CommandText = sql;
                 
                 try
@@ -57,15 +60,23 @@ public class FirebirdSqlExecutor
                 }
                 catch (FbException fbEx)
                 {
-                    var errorDetails = SqlErrorFormatter.FormatFirebirdError(fbEx, sql, statementIndex);
+                    var errorDetails = SqlErrorFormatter.FormatSqlError(fbEx, sql, statementIndex);
+                    
                     throw new InvalidOperationException(errorDetails, fbEx);
                 }
                 catch (Exception ex)
                 {
-                    var errorDetails = SqlErrorFormatter.FormatGenericError(ex, sql, statementIndex);
-                    throw new InvalidOperationException(errorDetails, ex);
+                    var errorMessage = $"Błąd podczas wykonywania statement #{statementIndex}: {ex.Message}";
+                    
+                    if (ex.InnerException != null)
+                    {
+                        errorMessage += $"\nSzczegóły: {ex.InnerException.Message}";
+                    }
+                    throw new InvalidOperationException(errorMessage, ex);
                 }
             }
+            
+            validationCallback?.Invoke(this);
             
             transaction.Commit();
         }
@@ -73,6 +84,10 @@ public class FirebirdSqlExecutor
         {
             transaction.Rollback();
             throw;
+        }
+        finally
+        {
+            _currentWriteTransaction = null;
         }
     }
 
@@ -85,28 +100,38 @@ public class FirebirdSqlExecutor
             throw new ArgumentNullException(nameof(mapper));
 
         EnsureConnection();
+        
+        var transactionToUse = _currentWriteTransaction;
 
-        if (_readTransaction == null)
+        if (transactionToUse == null)
         {
-            var options = new FbTransactionOptions
+            if (_readTransaction == null)
             {
-                TransactionBehavior = FbTransactionBehavior.Concurrency | 
-                                      FbTransactionBehavior.Wait | 
-                                      FbTransactionBehavior.Read
-            };
+                var options = new FbTransactionOptions
+                {
+                    TransactionBehavior = FbTransactionBehavior.Concurrency | 
+                                          FbTransactionBehavior.Wait | 
+                                          FbTransactionBehavior.Read
+                };
 
-            _readTransaction = _connection!.BeginTransaction(options);
+                _readTransaction = _connection!.BeginTransaction(options);
+            }
+
+            transactionToUse = _readTransaction;
         }
 
         var results = new List<T>();
 
         using var command = _connection!.CreateCommand();
-        command.Transaction = _readTransaction;
+        
+        command.Transaction = transactionToUse;
+        
         command.CommandText = sql;
 
         try
         {
             using var reader = command.ExecuteReader();
+            
             while (reader.Read())
             {
                 results.Add(mapper(reader));
@@ -114,13 +139,20 @@ public class FirebirdSqlExecutor
         }
         catch (FbException fbEx)
         {
-            var errorDetails = SqlErrorFormatter.FormatFirebirdError(fbEx, sql, 0);
+            var errorDetails = SqlErrorFormatter.FormatSqlError(fbEx, sql, 0);
+            
             throw new InvalidOperationException(errorDetails, fbEx);
         }
         catch (Exception ex)
         {
-            var errorDetails = SqlErrorFormatter.FormatGenericError(ex, sql, 0);
-            throw new InvalidOperationException(errorDetails, ex);
+            var errorMessage = $"Błąd podczas wykonywania zapytania: {ex.Message}";
+            
+            if (ex.InnerException != null)
+            {
+                errorMessage += $"\nSzczegóły: {ex.InnerException.Message}";
+            }
+            
+            throw new InvalidOperationException(errorMessage, ex);
         }
 
         return results;
@@ -144,6 +176,7 @@ public class FirebirdSqlExecutor
             return;
         
         _readTransaction?.Dispose();
+        
         _connection?.Dispose();
 
         _disposed = true;

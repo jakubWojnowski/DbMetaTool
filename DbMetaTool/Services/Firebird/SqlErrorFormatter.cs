@@ -4,73 +4,116 @@ namespace DbMetaTool.Services.Firebird;
 
 public static class SqlErrorFormatter
 {
-    public static string FormatFirebirdError(FbException ex, string sql, int statementIndex)
+    public static string FormatSqlError(FbException ex, string sql, int statementIndex)
     {
-        var sqlPreview = GetSqlPreview(sql);
+        var sqlPreview = GetSqlPreview(sql, 200);
         var statementType = DetectStatementType(sql);
         
-        var errorMessage = new System.Text.StringBuilder();
-        errorMessage.AppendLine($"=== Błąd wykonania statement #{statementIndex} ===");
-        
+        var sb = new System.Text.StringBuilder();
         if (!string.IsNullOrEmpty(statementType))
         {
-            errorMessage.AppendLine($"Typ: {statementType}");
+            sb.AppendLine($"Błąd wykonania {statementType} (statement #{statementIndex}):");
         }
-        
-        errorMessage.AppendLine();
-        errorMessage.AppendLine($"Kod błędu Firebird: {ex.ErrorCode}");
+        else
+        {
+            sb.AppendLine($"Błąd wykonania statement #{statementIndex}:");
+        }
+        sb.AppendLine();
         
         if (!string.IsNullOrWhiteSpace(ex.Message))
         {
-            errorMessage.AppendLine($"Komunikat: {ex.Message}");
+            sb.AppendLine(ex.Message);
         }
         
         if (ex.Errors is { Count: > 0 })
         {
-            errorMessage.AppendLine();
-            errorMessage.AppendLine("Szczegóły błędów Firebird:");
-            foreach (var error in ex.Errors)
+            var uniqueMessages = ex.Errors
+                .Where(e => !string.IsNullOrWhiteSpace(e.Message))
+                .Select(e => e.Message.Trim())
+                .Distinct()
+                .Where(msg => string.IsNullOrWhiteSpace(ex.Message) || !ex.Message.Contains(msg, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+                
+            if (uniqueMessages.Count > 0)
             {
-                errorMessage.AppendLine($"  Kod: {error.Number}");
-                if (!string.IsNullOrWhiteSpace(error.Message))
+                sb.AppendLine();
+                foreach (var msg in uniqueMessages)
                 {
-                    errorMessage.AppendLine($"  Komunikat: {error.Message}");
+                    sb.AppendLine($"  {msg}");
                 }
             }
         }
         
-        errorMessage.AppendLine();
-        errorMessage.AppendLine($"SQL ({sql.Length} znaków):");
-        errorMessage.AppendLine(sqlPreview);
-        
-        return errorMessage.ToString();
-    }
-
-    public static string FormatGenericError(Exception ex, string sql, int statementIndex)
-    {
-        var sqlPreview = GetSqlPreview(sql);
-        var statementType = DetectStatementType(sql);
-        
-        var errorMessage = new System.Text.StringBuilder();
-        errorMessage.AppendLine($"=== Błąd wykonania statement #{statementIndex} ===");
-        
-        if (!string.IsNullOrEmpty(statementType))
+        if (sql.Length <= 300)
         {
-            errorMessage.AppendLine($"Typ: {statementType}");
+            sb.AppendLine();
+            sb.AppendLine("SQL:");
+            sb.AppendLine(sqlPreview);
+        }
+        else
+        {
+            sb.AppendLine();
+            sb.AppendLine($"SQL: {sqlPreview}... (pełny SQL ma {sql.Length} znaków)");
         }
         
-        errorMessage.AppendLine($"Typ błędu: {ex.GetType().Name}");
-        errorMessage.AppendLine($"Komunikat: {ex.Message}");
+        return sb.ToString();
+    }
+
+    public static string FormatSqlError(Exception ex, string sql, int statementIndex)
+    {
+        var sqlPreview = GetSqlPreview(sql, 200);
+        var statementType = DetectStatementType(sql);
+        
+        var sb = new System.Text.StringBuilder();
+        if (!string.IsNullOrEmpty(statementType))
+        {
+            sb.AppendLine($"Błąd wykonania {statementType} (statement #{statementIndex}):");
+        }
+        else
+        {
+            sb.AppendLine($"Błąd wykonania statement #{statementIndex}:");
+        }
+        sb.AppendLine();
+        sb.AppendLine(ex.Message);
         
         if (ex.InnerException != null)
         {
-            errorMessage.AppendLine($"Błąd wewnętrzny: {ex.InnerException.Message}");
+            sb.AppendLine();
+            sb.AppendLine($"Szczegóły: {ex.InnerException.Message}");
         }
         
-        errorMessage.AppendLine($"\nSQL ({sql.Length} znaków):");
-        errorMessage.AppendLine(sqlPreview);
+        if (sql.Length <= 300)
+        {
+            sb.AppendLine();
+            sb.AppendLine("SQL:");
+            sb.AppendLine(sqlPreview);
+        }
+        else
+        {
+            sb.AppendLine();
+            sb.AppendLine($"SQL: {sqlPreview}... (pełny SQL ma {sql.Length} znaków)");
+        }
         
-        return errorMessage.ToString();
+        return sb.ToString();
+    }
+
+    public static string FormatValidationError(List<string> invalidProcedures)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine("Błąd walidacji integralności procedur:");
+        sb.AppendLine();
+        sb.AppendLine($"Znaleziono {invalidProcedures.Count} procedur z nieprawidłowym BLR:");
+        
+        foreach (var procName in invalidProcedures)
+        {
+            sb.AppendLine($"  - {procName}");
+        }
+        
+        sb.AppendLine();
+        sb.AppendLine("Prawdopodobna przyczyna: Niezgodność sygnatur wywołań procedur.");
+        sb.AppendLine("Sprawdź skrypty SQL i upewnij się, że wszystkie wywołania procedur mają poprawne sygnatury.");
+        
+        return sb.ToString();
     }
 
     private static string GetSqlPreview(string sql, int maxLength = 500)
