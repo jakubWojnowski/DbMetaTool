@@ -329,7 +329,7 @@ public static class FirebirdMetadataReader
         int? charLength)
     {
         var hasNegativeScale = fieldScale.HasValue && fieldScale.Value < 0;
-        var absoluteScale = hasNegativeScale ? Math.Abs(fieldScale.Value) : 0;
+        var absoluteScale = hasNegativeScale ? Math.Abs(fieldScale!.Value) : 0;
 
         return fieldType switch
         {
