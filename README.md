@@ -118,13 +118,6 @@ dotnet run --project DbMetaTool build-db \
   --scripts-dir "./scripts"
 
 # Wynik: /var/lib/firebird/data/myapp.fdb
-
-# Windows - baza w lokalnym katalogu ./databases/
-dotnet run --project DbMetaTool build-db \
-  --db-dir "myapp" \
-  --scripts-dir "./scripts"
-
-# Wynik: ./databases/myapp.fdb
 ```
 
 #### Struktura katalogu skryptów
