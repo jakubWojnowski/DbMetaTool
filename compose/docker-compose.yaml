@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  firebird:
+    image: firebirdsql/firebird:5.0.1
+    container_name: firebird-db
+    ports:
+      - "3050:3050"
+    environment:
+      FIREBIRD_USER: SYSDBA
+      FIREBIRD_PASSWORD: masterkey
+    volumes:
+      - ./data:/var/lib/firebird/data
+    restart: unless-stopped
