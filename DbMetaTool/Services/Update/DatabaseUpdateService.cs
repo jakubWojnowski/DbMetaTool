@@ -1,6 +1,7 @@
 using DbMetaTool.Models;
 using DbMetaTool.Services.Firebird;
 using DbMetaTool.Services.SqlScripts;
+using DbMetaTool.Services.Validation;
 using DbMetaTool.Utilities;
 
 namespace DbMetaTool.Services.Update;
@@ -8,26 +9,32 @@ namespace DbMetaTool.Services.Update;
 public class DatabaseUpdateService(ISqlExecutor mainExecutor)
 {
     private readonly List<DatabaseChange> _changes = [];
+    private List<DomainMetadata> _existingDomains = [];
+    private readonly List<string> _allStatements = [];
 
     public List<DatabaseChange> GetChanges() => _changes;
 
     public void ProcessUpdate(
         List<ScriptFile> scripts,
         List<DomainMetadata> existingDomains,
-        List<TableMetadata> existingTables)
+        List<TableMetadata> existingTables,
+        List<ProcedureMetadata> existingProcedures)
     {
-        mainExecutor.ExecuteInTransaction(executor =>
+        _existingDomains = existingDomains;
+        
+        ProcessDomains(scripts, existingDomains);
+        
+        ProcessTables(scripts, existingTables);
+        
+        ProcessProcedures(scripts, existingProcedures);
+        
+        if (_allStatements.Count > 0)
         {
-            ProcessDomains(executor, scripts, existingDomains);
-            
-            ProcessTables(executor, scripts, existingTables);
-            
-            ProcessProcedures(executor, scripts);
-        });
+            mainExecutor.ExecuteBatch(_allStatements, ProcedureBlrValidator.ValidateProcedureIntegrity);
+        }
     }
 
     private void ProcessDomains(
-        ISqlExecutor executor,
         List<ScriptFile> scripts,
         List<DomainMetadata> existingDomains)
     {
@@ -44,7 +51,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
 
             if (!exists)
             {
-                TryCreateDomain(executor, script, domainName);
+                TryCreateDomain(script, domainName);
             }
             else
             {
@@ -56,7 +63,6 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
     }
 
     private void ProcessTables(
-        ISqlExecutor executor,
         List<ScriptFile> scripts,
         List<TableMetadata> existingTables)
     {
@@ -73,13 +79,21 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
 
             if (existingTable == null)
             {
-                TryCreateTable(executor, script, tableName);
+                TryCreateTable(script, tableName);
             }
             else
             {
-                Console.WriteLine($"  Tabela {tableName} istnieje - sprawdzam kolumny...");
-                
-                ProcessTableColumns(executor, script, existingTable);
+                var sql = ScriptLoader.ReadScriptContent(script);
+                if (HasCreateStatement(sql))
+                {
+                    Console.WriteLine($"  Tabela {tableName} już istnieje - pomijam skrypt CREATE");
+                }
+                else
+                {
+                    Console.WriteLine($"  Tabela {tableName} istnieje - sprawdzam kolumny...");
+                    
+                    ProcessTableColumns(script, existingTable);
+                }
             }
         }
 
@@ -87,8 +101,8 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
     }
 
     private void ProcessProcedures(
-        ISqlExecutor executor,
-        List<ScriptFile> scripts)
+        List<ScriptFile> scripts,
+        List<ProcedureMetadata> existingProcedures)
     {
         Console.WriteLine("=== Przetwarzanie procedur ===");
 
@@ -98,81 +112,65 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
         {
             var procedureName = Path.GetFileNameWithoutExtension(script.FileName);
             
-            TryExecuteProcedureScript(executor, script, procedureName);
+            var existingProcedure = existingProcedures.FirstOrDefault(p =>
+                p.Name.Equals(procedureName, StringComparison.OrdinalIgnoreCase));
+
+            if (existingProcedure != null)
+            {
+                var sql = ScriptLoader.ReadScriptContent(script);
+                if (HasCreateStatement(sql))
+                {
+                    Console.WriteLine($"  Procedura {procedureName} już istnieje - pomijam skrypt CREATE");
+                    continue;
+                }
+            }
+            
+            CollectProcedureStatements(script, procedureName);
         }
 
         Console.WriteLine();
     }
 
-    private void TryCreateDomain(ISqlExecutor executor, ScriptFile script, string domainName)
+    private void TryCreateDomain(ScriptFile script, string domainName)
     {
-        try
-        {
-            Console.Write($"  Tworzenie domeny {domainName}... ");
-            
-            var sql = ScriptLoader.ReadScriptContent(script);
-            
-            var statements = SqlScriptParser.ParseScript(sql);
+        Console.Write($"  Tworzenie domeny {domainName}... ");
+        
+        var sql = ScriptLoader.ReadScriptContent(script);
+        
+        var statements = SqlScriptParser.ParseScript(sql)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
 
-            foreach (var statement in statements)
-            {
-                executor.ExecuteNonQuery(statement);
-            }
+        _allStatements.AddRange(statements);
 
-            _changes.Add(new DatabaseChange(
-                ChangeType.DomainCreated,
-                domainName,
-                null));
-            Console.WriteLine("✓");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"✗ Błąd: {ex.Message}");
-            
-            _changes.Add(new DatabaseChange(
-                ChangeType.ManualReviewRequired,
-                domainName,
-                $"Błąd tworzenia: {ex.Message}"));
-            throw;
-        }
+        _changes.Add(new DatabaseChange(
+            ChangeType.DomainCreated,
+            domainName,
+            null));
+        Console.WriteLine("✓");
     }
 
-    private void TryCreateTable(ISqlExecutor executor, ScriptFile script, string tableName)
+    private void TryCreateTable(ScriptFile script, string tableName)
     {
-        try
-        {
-            Console.Write($"  Tworzenie tabeli {tableName}... ");
-            
-            var sql = ScriptLoader.ReadScriptContent(script);
-            
-            var statements = SqlScriptParser.ParseScript(sql);
+        Console.Write($"  Tworzenie tabeli {tableName}... ");
+        
+        var sql = ScriptLoader.ReadScriptContent(script);
+        
+        var statements = SqlScriptParser.ParseScript(sql)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
 
-            foreach (var statement in statements)
-            {
-                executor.ExecuteNonQuery(statement);
-            }
+        _allStatements.AddRange(statements);
 
-            _changes.Add(new DatabaseChange(
-                ChangeType.TableCreated,
-                tableName,
-                null));
-            
-            Console.WriteLine("✓");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"✗ Błąd: {ex.Message}");
-            
-            _changes.Add(new DatabaseChange(
-                ChangeType.ManualReviewRequired,
-                tableName,
-                $"Błąd tworzenia: {ex.Message}"));
-            
-            throw;
-        }
+        _changes.Add(new DatabaseChange(
+            ChangeType.TableCreated,
+            tableName,
+            null));
+        
+        Console.WriteLine("✓");
     }
 
-    private void ProcessTableColumns(ISqlExecutor executor, ScriptFile script, TableMetadata existingTable)
+    private void ProcessTableColumns(ScriptFile script, TableMetadata existingTable)
     {
         var sql = ScriptLoader.ReadScriptContent(script);
         
@@ -186,7 +184,8 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
 
         var alterStatements = DatabaseSchemaComparer.GenerateAlterStatements(
             existingTable,
-            desiredTable);
+            desiredTable,
+            _existingDomains);
 
         foreach (var statement in alterStatements)
         {
@@ -201,75 +200,66 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
             }
             else
             {
-                TryAddColumn(executor, statement, existingTable.Name);
+                TryAddColumn(statement, existingTable.Name);
             }
         }
     }
 
-    private void TryAddColumn(ISqlExecutor executor, string statement, string tableName)
+    private void TryAddColumn(string statement, string tableName)
     {
-        try
-        {
-            Console.Write($"    Dodawanie kolumny... ");
-            
-            executor.ExecuteNonQuery(statement);
+        Console.Write($"    Dodawanie kolumny... ");
+        
+        _allStatements.Add(statement);
 
-            var columnName = ScriptDefinitionParser.ExtractColumnName(statement);
-            
-            _changes.Add(new DatabaseChange(
-                ChangeType.ColumnAdded,
-                $"{tableName}.{columnName}",
-                statement));
-            Console.WriteLine("✓");
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"✗ Błąd: {ex.Message}");
-            
-            _changes.Add(new DatabaseChange(
-                ChangeType.ManualReviewRequired,
-                tableName,
-                $"Błąd ALTER: {ex.Message}"));
-            
-            throw;
-        }
+        var columnName = ScriptDefinitionParser.ExtractColumnName(statement);
+        
+        _changes.Add(new DatabaseChange(
+            ChangeType.ColumnAdded,
+            $"{tableName}.{columnName}",
+            statement));
+        Console.WriteLine("✓");
     }
 
-    private void TryExecuteProcedureScript(ISqlExecutor executor, ScriptFile script, string procedureName)
+    private void CollectProcedureStatements(ScriptFile script, string procedureName)
     {
-        try
+        Console.Write($"  Procedura {procedureName}... ");
+        
+        var callingProcedures = ProcedureDependencyValidator.GetCallingProcedures(mainExecutor, procedureName);
+        
+        if (callingProcedures.Count > 0)
         {
-            Console.Write($"  Procedura {procedureName}... ");
-            
-            var sql = ScriptLoader.ReadScriptContent(script);
-            
-            var statements = SqlScriptParser.ParseScript(sql);
-
-            foreach (var statement in statements)
-            {
-                if (!string.IsNullOrWhiteSpace(statement))
-                {
-                    executor.ExecuteNonQuery(statement);
-                }
-            }
-
-            _changes.Add(new DatabaseChange(
-                ChangeType.ProcedureModified,
-                procedureName,
-                "Wykonano skrypt"));
-            Console.WriteLine("✓");
+            Console.WriteLine();
+            Console.WriteLine($"    ⚠ Procedura jest wywoływana przez: {string.Join(", ", callingProcedures)}");
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"✗ Błąd: {ex.Message}");
-            
-            _changes.Add(new DatabaseChange(
-                ChangeType.ManualReviewRequired,
-                procedureName,
-                $"Błąd: {ex.Message}"));
-            
-            throw;
-        }
+        
+        var sql = ScriptLoader.ReadScriptContent(script);
+        var statements = SqlScriptParser.ParseScript(sql)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
+        
+        _allStatements.AddRange(statements);
+   
+        
+        _changes.Add(new DatabaseChange(
+            ChangeType.ProcedureModified,
+            procedureName,
+            "Wykonano skrypt"));
+        Console.WriteLine("✓");
     }
+
+    private static bool HasCreateStatement(string sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return false;
+        }
+
+        var upperSql = sql.ToUpperInvariant();
+        
+        return upperSql.Contains("CREATE PROCEDURE", StringComparison.OrdinalIgnoreCase) ||
+               upperSql.Contains("CREATE TABLE", StringComparison.OrdinalIgnoreCase) ||
+               upperSql.Contains("CREATE DOMAIN", StringComparison.OrdinalIgnoreCase);
+    }
+
 }
 

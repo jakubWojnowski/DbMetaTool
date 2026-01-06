@@ -12,7 +12,7 @@ public class SqlScriptHelper : IDisposable
         _baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
     }
 
-    public ScriptFile CreateDomainScript(string domainName, string content)
+    private ScriptFile CreateDomainScript(string domainName, string content)
     {
         var fileName = $"{domainName}.sql";
         
@@ -25,7 +25,7 @@ public class SqlScriptHelper : IDisposable
         return new ScriptFile(filePath, fileName, ScriptType.Domain);
     }
 
-    public ScriptFile CreateTableScript(string tableName, string content)
+    private ScriptFile CreateTableScript(string tableName, string content)
     {
         var fileName = $"{tableName}.sql";
         
@@ -38,7 +38,7 @@ public class SqlScriptHelper : IDisposable
         return new ScriptFile(filePath, fileName, ScriptType.Table);
     }
 
-    public ScriptFile CreateProcedureScript(string procedureName, string content)
+    private ScriptFile CreateProcedureScript(string procedureName, string content)
     {
         var fileName = $"{procedureName}.sql";
         
@@ -49,6 +49,40 @@ public class SqlScriptHelper : IDisposable
         _createdFiles.Add(filePath);
         
         return new ScriptFile(filePath, fileName, ScriptType.Procedure);
+    }
+
+    public ScriptFile CreateDomainScriptFromTemplate(string domainName, string dataType)
+    {
+        var sql = SqlTemplates.CreateDomain(domainName, dataType);
+        return CreateDomainScript(domainName, sql);
+    }
+
+    public ScriptFile CreateTableScriptFromTemplate(string tableName, params string[] columnDefinitions)
+    {
+        var sql = SqlTemplates.CreateSimpleTable(tableName, columnDefinitions);
+        return CreateTableScript(tableName, sql);
+    }
+
+    public ScriptFile CreateTableColumnsOnlyScript(string tableName, params string[] columnDefinitions)
+    {
+        var sql = SqlTemplates.CreateTableColumnsOnly(columnDefinitions);
+        return CreateTableScript(tableName, sql);
+    }
+
+    public ScriptFile CreateSimpleProcedureScript(string procedureName, string body = "BEGIN END")
+    {
+        var sql = SqlTemplates.CreateSimpleProcedure(procedureName, body);
+        return CreateProcedureScript(procedureName, sql);
+    }
+
+    public ScriptFile CreateFirebirdProcedureScript(
+        string procedureName,
+        string parameters,
+        string returns,
+        string body)
+    {
+        var sql = SqlTemplates.CreateFirebirdProcedure(procedureName, parameters, returns, body);
+        return CreateProcedureScript(procedureName, sql);
     }
 
     public void Dispose()

@@ -20,7 +20,7 @@ public static class MetadataExportService
 
         PrepareOutputDirectory(outputDirectory);
 
-        Console.WriteLine("Pobieranie metadanych...");
+        Console.WriteLine("Pobieranie metadanych (spójny snapshot)...");
         
         var domains = ReadDomains(executor);
         

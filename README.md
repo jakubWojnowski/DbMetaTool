@@ -2,6 +2,14 @@
 
 Narzędzie CLI do zarządzania metadanymi i schematem bazy danych Firebird 5.0.
 
+## ✨ Kluczowe funkcje
+
+- **🔒 Izolacja snapshot** - Eksport metadanych w spójnym stanie z jednego momentu w czasie
+- **✅ Walidacja kompilacji** - Automatyczna weryfikacja integralności procedur (BLR) po każdej zmianie
+- **⚠️ Analiza zależności** - Ostrzeżenia o procedurach wywołujących modyfikowane procedury
+- **🔄 Transakcyjność** - Wszystkie operacje w jednej transakcji z automatycznym rollback przy błędach
+- **🛡️ Bezpieczeństwo** - Ochrona przed przypadkową utratą danych (brak automatycznego usuwania)
+
 ## 📋 Spis treści
 
 - [Wymagania](#wymagania)
@@ -172,6 +180,37 @@ Wykonano pomyślnie: 5
   - Aby utworzyć bazę, najpierw usuń starą ręcznie lub użyj innej nazwy
   - To zapobiega przypadkowej utracie danych
 
+#### ✅ Walidacja kompilacji procedur (BLR)
+
+Po wykonaniu wszystkich skryptów, narzędzie automatycznie **waliduje integralność procedur**:
+
+- Sprawdza, czy wszystkie procedury mają poprawny BLR (Binary Language Representation)
+- Jeśli któraś procedura ma nieprawidłowy BLR (`RDB$VALID_BLR = 0`), operacja zostaje **przerwana** i transakcja jest wycofywana
+- Zapobiega to sytuacjom, w których zmiana sygnatury jednej procedury powoduje błędy kompilacji w procedurach zależnych
+
+**Przykład błędu walidacji:**
+
+```
+=== Walidacja integralności procedur ===
+⚠ Znaleziono 2 procedur z nieprawidłowym BLR:
+  - IMPORT_EMPLOYEES_DATA
+  - PROCESS_ORDERS
+
+Błąd walidacji integralności procedur:
+
+Znaleziono 2 procedur z nieprawidłowym BLR:
+  - IMPORT_EMPLOYEES_DATA
+  - PROCESS_ORDERS
+
+Prawdopodobna przyczyna: Niezgodność sygnatur wywołań procedur.
+Sprawdź skrypty SQL i upewnij się, że wszystkie wywołania procedur mają poprawne sygnatury.
+```
+
+**Co to oznacza?**
+- Procedury `IMPORT_EMPLOYEES_DATA` i `PROCESS_ORDERS` nie mogą się skompilować
+- Prawdopodobnie wywołują inną procedurę (np. `CREATE_EMPLOYEE`) z nieprawidłową sygnaturą
+- Wszystkie zmiany zostały wycofane (ROLLBACK) - baza pozostaje w poprzednim stanie
+
 ---
 
 ### `export-scripts` - Eksport metadanych
@@ -253,6 +292,19 @@ Narzędzie automatycznie **pomija systemowe obiekty Firebird**:
 - `RDB$*` - systemowe tabele/procedury
 - `MON$*` - monitoring
 - `SEC$*` - security
+
+#### 🔒 Izolacja transakcyjna (Snapshot Isolation)
+
+Operacja eksportu używa **izolacji snapshot** (Concurrency) do zapewnienia spójności metadanych:
+
+- Wszystkie odczyty metadanych (domeny, tabele, procedury) są wykonywane w **jednej transakcji snapshot**
+- Gwarantuje to, że wyeksportowane skrypty reprezentują **spójny stan bazy danych** z jednego momentu w czasie
+- Zapobiega sytuacjom, w których mogłyby zostać pobrane metadane z różnych momentów (np. stara wersja jednej procedury i nowa wersja innej)
+- Dzięki temu pliki w repozytorium Git zawsze reprezentują działający, spójny stan bazy danych
+
+**Techniczne szczegóły:**
+- Transakcja używa `FbTransactionBehavior.Concurrency | FbTransactionBehavior.Wait | FbTransactionBehavior.Read`
+- Wszystkie zapytania do `RDB$*` tabel systemowych używają tej samej transakcji snapshot
 
 ---
 
@@ -360,6 +412,111 @@ Podsumowanie:
 #### ⚠️ Transakcyjność
 
 Wszystkie operacje są wykonywane w **jednej transakcji**. Jeśli jakakolwiek operacja zawiedzie, całość zostaje wycofana (ROLLBACK).
+
+#### ✅ Walidacja kompilacji procedur (BLR)
+
+Po wykonaniu wszystkich zmian, narzędzie automatycznie **waliduje integralność procedur**:
+
+- Sprawdza, czy wszystkie procedury mają poprawny BLR (Binary Language Representation)
+- Jeśli któraś procedura ma nieprawidłowy BLR (`RDB$VALID_BLR = 0`), operacja zostaje **przerwana** i transakcja jest wycofywana
+- Zapobiega to sytuacjom, w których zmiana sygnatury jednej procedury powoduje błędy kompilacji w procedurach zależnych
+
+**Przykład błędu walidacji:**
+
+```
+=== Walidacja integralności procedur ===
+⚠ Znaleziono 1 procedur z nieprawidłowym BLR:
+  - IMPORT_EMPLOYEES_DATA
+
+Błąd walidacji integralności procedur:
+
+Znaleziono 1 procedur z nieprawidłowym BLR:
+  - IMPORT_EMPLOYEES_DATA
+
+Prawdopodobna przyczyna: Niezgodność sygnatur wywołań procedur.
+Sprawdź skrypty SQL i upewnij się, że wszystkie wywołania procedur mają poprawne sygnatury.
+```
+
+**Co to oznacza?**
+- Procedura `IMPORT_EMPLOYEES_DATA` nie może się skompilować po zmianach
+- Prawdopodobnie wywołuje inną procedurę (np. `CREATE_EMPLOYEE`) z nieprawidłową sygnaturą po jej modyfikacji
+- Wszystkie zmiany zostały wycofane (ROLLBACK) - baza pozostaje w poprzednim stanie
+
+#### ⚠️ Ostrzeżenia o zależnościach procedur
+
+Przed modyfikacją procedury, narzędzie sprawdza **zależności** i ostrzega, jeśli procedura jest wywoływana przez inne:
+
+**Przykład ostrzeżenia:**
+
+```
+=== Przetwarzanie procedur ===
+  Procedura CREATE_EMPLOYEE... 
+    ⚠ Procedura jest wywoływana przez: IMPORT_EMPLOYEES_DATA, PROCESS_NEW_HIRES
+  ✓
+```
+
+**Co to oznacza?**
+- Procedura `CREATE_EMPLOYEE` jest używana przez `IMPORT_EMPLOYEES_DATA` i `PROCESS_NEW_HIRES`
+- Zmiana sygnatury `CREATE_EMPLOYEE` może spowodować błędy kompilacji w procedurach zależnych
+- Narzędzie kontynuuje operację, ale ostrzega o potencjalnych problemach
+- Jeśli walidacja BLR wykryje błędy, transakcja zostanie wycofana
+
+**Zalecenie:**
+- Przed modyfikacją procedury używanej przez inne, sprawdź wszystkie zależności
+- Upewnij się, że wszystkie wywołania mają poprawną sygnaturę
+- Rozważ aktualizację wszystkich procedur zależnych w jednej operacji
+
+---
+
+## 🛡️ Bezpieczeństwo i integralność danych
+
+DbMetaTool implementuje szereg mechanizmów zapewniających bezpieczeństwo i integralność danych:
+
+### Transakcyjność i atomowość
+
+- **Wszystkie operacje DDL** (CREATE, ALTER) są wykonywane w **jednej transakcji**
+- Jeśli jakakolwiek operacja zawiedzie, **cała transakcja jest wycofywana** (ROLLBACK)
+- Gwarantuje to, że baza danych zawsze pozostaje w spójnym stanie - albo wszystkie zmiany są zatwierdzone, albo żadna
+
+### Walidacja integralności procedur
+
+- Po każdej operacji modyfikującej procedury, narzędzie **automatycznie sprawdza kompilację** wszystkich procedur
+- Wykrywa błędy kompilacji wynikające z niezgodności sygnatur (np. zmiana parametrów procedury wywoływanej przez inne)
+- Jeśli wykryje nieprawidłowe procedury, **automatycznie wycofuje wszystkie zmiany**
+- Zapobiega sytuacjom, w których baza pozostaje w stanie z niekompilującymi się procedurami
+
+### Izolacja snapshot w eksporcie
+
+- Eksport metadanych używa **izolacji snapshot** (Concurrency) Firebird
+- Wszystkie odczyty są wykonywane w **jednej transakcji snapshot**
+- Gwarantuje **spójność metadanych** - wyeksportowane skrypty reprezentują stan bazy z jednego momentu
+- Zapobiega sytuacjom, w których mogłyby zostać pobrane metadane z różnych momentów w czasie
+
+### Ochrona przed utratą danych
+
+- **Brak automatycznego usuwania** - narzędzie nie usuwa kolumn, tabel ani domen, nawet jeśli nie ma ich w skryptach
+- **Ochrona przed nadpisaniem** - operacja `build-db` nie nadpisze istniejącej bazy danych
+- **Ostrzeżenia o zależnościach** - przed modyfikacją procedury, narzędzie informuje o procedurach, które ją wywołują
+
+### Obsługa blokad i współbieżności
+
+- Operacje zapisu używają `FbTransactionBehavior.Wait` z timeoutem 10 sekund
+- Pozwala to narzędziu poczekać na zwolnienie blokady przez inne sesje
+- Zapobiega błędom "object in use" podczas aktualizacji metadanych na "żywym" systemie
+
+### Przykładowy scenariusz bezpieczeństwa
+
+```
+1. Użytkownik modyfikuje procedurę CREATE_EMPLOYEE (dodaje nowy parametr)
+2. Narzędzie ostrzega: "Procedura jest wywoływana przez: IMPORT_EMPLOYEES_DATA"
+3. Narzędzie wykonuje zmianę w transakcji
+4. Walidacja BLR wykrywa, że IMPORT_EMPLOYEES_DATA ma nieprawidłowy BLR
+5. Transakcja jest automatycznie wycofywana (ROLLBACK)
+6. Baza pozostaje w poprzednim, działającym stanie
+7. Użytkownik otrzymuje czytelny komunikat o błędzie i może poprawić skrypty
+```
+
+---
 
 ## 📁 Struktura projektu
 

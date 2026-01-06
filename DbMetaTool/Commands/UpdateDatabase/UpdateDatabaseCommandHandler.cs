@@ -46,7 +46,8 @@ public static class UpdateDatabaseCommandHandler
         updateService.ProcessUpdate(
             scripts, 
             existingDomains, 
-            existingTables);
+            existingTables,
+            existingProcedures);
 
         UpdateReportGenerator.DisplayReport(updateService.GetChanges());
     }

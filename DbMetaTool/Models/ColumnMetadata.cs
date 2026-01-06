@@ -11,5 +11,3 @@ public record ColumnMetadata(
     string? DefaultValue,
     string? DomainName
 );
-
-

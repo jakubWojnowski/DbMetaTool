@@ -11,17 +11,13 @@ public class DatabaseUpdateServiceTests
 {
     private ISqlExecutor _mockExecutor = null!;
     private DatabaseUpdateService _service = null!;
-    private ISqlExecutor _transactionExecutor = null!;
     private SqlScriptHelper _scriptHelper = null!;
 
     [SetUp]
     public void SetUp()
     {
         _mockExecutor = Substitute.For<ISqlExecutor>();
-        _transactionExecutor = Substitute.For<ISqlExecutor>();
         _scriptHelper = new SqlScriptHelper();
-        
-        ConfigureTransactionMock();
 
         _service = new DatabaseUpdateService(_mockExecutor);
     }
@@ -30,17 +26,6 @@ public class DatabaseUpdateServiceTests
     public void TearDown()
     {
         _scriptHelper?.Dispose();
-    }
-
-    private void ConfigureTransactionMock()
-    {
-        _mockExecutor
-            .When(x => x.ExecuteInTransaction(Arg.Any<Action<ISqlExecutor>>()))
-            .Do(callInfo =>
-            {
-                var action = callInfo.Arg<Action<ISqlExecutor>>();
-                action(_transactionExecutor);
-            });
     }
 
     #region ProcessUpdate Tests
@@ -52,28 +37,14 @@ public class DatabaseUpdateServiceTests
         var scripts = new List<ScriptFile>();
         var domains = new List<DomainMetadata>();
         var tables = new List<TableMetadata>();
+        var procedures = new List<ProcedureMetadata>();
 
         // Act
-        _service.ProcessUpdate(scripts, domains, tables);
+        _service.ProcessUpdate(scripts, domains, tables, procedures);
 
         // Assert
         Assert.That(_service.GetChanges(), Is.Empty);
-        _mockExecutor.Received(1).ExecuteInTransaction(Arg.Any<Action<ISqlExecutor>>());
-    }
-
-    [Test]
-    public void ProcessUpdate_ExecutesInTransaction()
-    {
-        // Arrange
-        var scripts = new List<ScriptFile>();
-        var domains = new List<DomainMetadata>();
-        var tables = new List<TableMetadata>();
-
-        // Act
-        _service.ProcessUpdate(scripts, domains, tables);
-
-        // Assert
-        _mockExecutor.Received(1).ExecuteInTransaction(Arg.Any<Action<ISqlExecutor>>());
+        _mockExecutor.DidNotReceive().ExecuteBatch(Arg.Any<List<string>>(), Arg.Any<Action<ISqlExecutor>>());
     }
 
     #endregion
@@ -84,19 +55,20 @@ public class DatabaseUpdateServiceTests
     public void ProcessUpdate_WithNewDomain_CreatesDomain()
     {
         // Arrange
-        var domainSql = SqlTemplates.CreateDomain("D_EMAIL", "VARCHAR(255)");
-        var script = _scriptHelper.CreateDomainScript("D_EMAIL", domainSql);
+        var script = _scriptHelper.CreateDomainScriptFromTemplate("D_EMAIL", "VARCHAR(255)");
         
         var scripts = new List<ScriptFile> { script };
         var existingDomains = new List<DomainMetadata>();
         var existingTables = new List<TableMetadata>();
+        var existingProcedures = new List<ProcedureMetadata>();
 
         // Act
-        _service.ProcessUpdate(scripts, existingDomains, existingTables);
+        _service.ProcessUpdate(scripts, existingDomains, existingTables, existingProcedures);
 
         // Assert
-        var containsDomainCreate = Arg.Is<string>(s => s.Contains("CREATE DOMAIN"));
-        _transactionExecutor.Received(1).ExecuteNonQuery(containsDomainCreate);
+        _mockExecutor.Received(1).ExecuteBatch(
+            Arg.Is<List<string>>(list => list.Any(s => s.Contains("CREATE DOMAIN"))),
+            Arg.Any<Action<ISqlExecutor>>());
         
         var changes = _service.GetChanges();
         Assert.That(changes, Has.Count.EqualTo(1));
@@ -108,8 +80,7 @@ public class DatabaseUpdateServiceTests
     public void ProcessUpdate_WithExistingDomain_SkipsDomain()
     {
         // Arrange
-        var domainSql = SqlTemplates.CreateDomain("D_EMAIL", "VARCHAR(255)");
-        var script = _scriptHelper.CreateDomainScript("D_EMAIL", domainSql);
+        var script = _scriptHelper.CreateDomainScriptFromTemplate("D_EMAIL", "VARCHAR(255)");
         
         var scripts = new List<ScriptFile> { script };
         var existingDomains = new List<DomainMetadata>
@@ -117,38 +88,39 @@ public class DatabaseUpdateServiceTests
             TestDataBuilder.CreateDomain("D_EMAIL", "VARCHAR", 255)
         };
         var existingTables = new List<TableMetadata>();
+        var existingProcedures = new List<ProcedureMetadata>();
 
         // Act
-        _service.ProcessUpdate(scripts, existingDomains, existingTables);
+        _service.ProcessUpdate(scripts, existingDomains, existingTables, existingProcedures);
 
         // Assert
-        _transactionExecutor.DidNotReceive().ExecuteNonQuery(Arg.Any<string>());
+        _mockExecutor.DidNotReceive().ExecuteBatch(Arg.Any<List<string>>(), Arg.Any<Action<ISqlExecutor>>());
         Assert.That(_service.GetChanges(), Is.Empty);
     }
 
     [Test]
-    public void ProcessUpdate_DomainCreationFails_AddsManualReviewChange()
+    public void ProcessUpdate_DomainCreationFails_ChangesAddedBeforeException()
     {
         // Arrange
-        var domainSql = SqlTemplates.CreateDomain("D_EMAIL", "VARCHAR(255)");
-        var script = _scriptHelper.CreateDomainScript("D_EMAIL", domainSql);
+        var script = _scriptHelper.CreateDomainScriptFromTemplate("D_EMAIL", "VARCHAR(255)");
         
         var scripts = new List<ScriptFile> { script };
         var existingDomains = new List<DomainMetadata>();
         var existingTables = new List<TableMetadata>();
+        var existingProcedures = new List<ProcedureMetadata>();
 
-        _transactionExecutor
-            .When(x => x.ExecuteNonQuery(Arg.Any<string>()))
+        _mockExecutor
+            .When(x => x.ExecuteBatch(Arg.Any<List<string>>(), Arg.Any<Action<ISqlExecutor>>()))
             .Do(x => throw new Exception("Database error"));
 
         // Act & Assert
-        Assert.Throws<Exception>(() => _service.ProcessUpdate(scripts, existingDomains, existingTables));
+        Assert.Throws<Exception>(() => _service.ProcessUpdate(scripts, existingDomains, existingTables, existingProcedures));
         
+        // Changes are added before ExecuteBatch is called, so they should be present even if ExecuteBatch fails
         var changes = _service.GetChanges();
         Assert.That(changes, Has.Count.EqualTo(1));
-        Assert.That(changes[0].Type, Is.EqualTo(ChangeType.ManualReviewRequired));
+        Assert.That(changes[0].Type, Is.EqualTo(ChangeType.DomainCreated));
         Assert.That(changes[0].ObjectName, Is.EqualTo("D_EMAIL"));
-        Assert.That(changes[0].Details, Does.Contain("Błąd tworzenia"));
     }
 
     #endregion
@@ -159,22 +131,23 @@ public class DatabaseUpdateServiceTests
     public void ProcessUpdate_WithNewTable_CreatesTable()
     {
         // Arrange
-        var tableSql = SqlTemplates.CreateSimpleTable(
+        var script = _scriptHelper.CreateTableScriptFromTemplate(
             "USERS",
             "ID INTEGER NOT NULL",
             "NAME VARCHAR(100)");
-        var script = _scriptHelper.CreateTableScript("USERS", tableSql);
         
         var scripts = new List<ScriptFile> { script };
         var existingDomains = new List<DomainMetadata>();
         var existingTables = new List<TableMetadata>();
+        var existingProcedures = new List<ProcedureMetadata>();
 
         // Act
-        _service.ProcessUpdate(scripts, existingDomains, existingTables);
+        _service.ProcessUpdate(scripts, existingDomains, existingTables, existingProcedures);
 
         // Assert
-        var containsTableCreate = Arg.Is<string>(s => s.Contains("CREATE TABLE"));
-        _transactionExecutor.Received().ExecuteNonQuery(containsTableCreate);
+        _mockExecutor.Received(1).ExecuteBatch(
+            Arg.Is<List<string>>(list => list.Any(s => s.Contains("CREATE TABLE"))),
+            Arg.Any<Action<ISqlExecutor>>());
         
         var changes = _service.GetChanges();
         Assert.That(changes, Has.Count.EqualTo(1));
@@ -186,12 +159,11 @@ public class DatabaseUpdateServiceTests
     public void ProcessUpdate_WithExistingTableAndNewColumn_AddsColumn()
     {
         // Arrange
-        var tableSql = SqlTemplates.CreateSimpleTable(
+        var script = _scriptHelper.CreateTableColumnsOnlyScript(
             "USERS",
             "ID INTEGER NOT NULL",
             "NAME VARCHAR(100)",
             "EMAIL VARCHAR(255)");
-        var script = _scriptHelper.CreateTableScript("USERS", tableSql);
         
         var scripts = new List<ScriptFile> { script };
         var existingDomains = new List<DomainMetadata>();
@@ -202,16 +174,15 @@ public class DatabaseUpdateServiceTests
                 TestDataBuilder.CreateIntegerColumn("ID", 0),
                 TestDataBuilder.CreateVarcharColumn("NAME", 1, 100))
         };
+        var existingProcedures = new List<ProcedureMetadata>();
 
         // Act
-        _service.ProcessUpdate(scripts, existingDomains, existingTables);
+        _service.ProcessUpdate(scripts, existingDomains, existingTables, existingProcedures);
 
         // Assert
-        var containsAlterAdd = Arg.Is<string>(s => 
-            s.Contains("ALTER TABLE") && 
-            s.Contains("ADD") && 
-            s.Contains("EMAIL"));
-        _transactionExecutor.Received().ExecuteNonQuery(containsAlterAdd);
+        _mockExecutor.Received(1).ExecuteBatch(
+            Arg.Is<List<string>>(list => list.Any(s => s.Contains("ALTER TABLE") && s.Contains("ADD"))),
+            Arg.Any<Action<ISqlExecutor>>());
         
         var changes = _service.GetChanges();
         var columnAdded = changes.FirstOrDefault(c => c.Type == ChangeType.ColumnAdded);
@@ -221,26 +192,27 @@ public class DatabaseUpdateServiceTests
     }
 
     [Test]
-    public void ProcessUpdate_TableCreationFails_AddsManualReviewChange()
+    public void ProcessUpdate_TableCreationFails_ChangesAddedBeforeException()
     {
         // Arrange
-        var tableSql = SqlTemplates.CreateSimpleTable("USERS", "ID INTEGER");
-        var script = _scriptHelper.CreateTableScript("USERS", tableSql);
+        var script = _scriptHelper.CreateTableScriptFromTemplate("USERS", "ID INTEGER");
         
         var scripts = new List<ScriptFile> { script };
         var existingDomains = new List<DomainMetadata>();
         var existingTables = new List<TableMetadata>();
+        var existingProcedures = new List<ProcedureMetadata>();
 
-        _transactionExecutor
-            .When(x => x.ExecuteNonQuery(Arg.Any<string>()))
+        _mockExecutor
+            .When(x => x.ExecuteBatch(Arg.Any<List<string>>(), Arg.Any<Action<ISqlExecutor>>()))
             .Do(x => throw new Exception("Table creation failed"));
 
         // Act & Assert
-        Assert.Throws<Exception>(() => _service.ProcessUpdate(scripts, existingDomains, existingTables));
+        Assert.Throws<Exception>(() => _service.ProcessUpdate(scripts, existingDomains, existingTables, existingProcedures));
         
+        // Changes are added before ExecuteBatch is called
         var changes = _service.GetChanges();
         Assert.That(changes, Has.Count.EqualTo(1));
-        Assert.That(changes[0].Type, Is.EqualTo(ChangeType.ManualReviewRequired));
+        Assert.That(changes[0].Type, Is.EqualTo(ChangeType.TableCreated));
         Assert.That(changes[0].ObjectName, Is.EqualTo("USERS"));
     }
 
@@ -252,50 +224,82 @@ public class DatabaseUpdateServiceTests
     public void ProcessUpdate_WithProcedure_ExecutesProcedureScript()
     {
         // Arrange
-        var procedureSql = SqlTemplates.CreateFirebirdProcedure(
+        var script = _scriptHelper.CreateFirebirdProcedureScript(
             "GET_USER_COUNT",
             "",
             "RETURNS (USER_COUNT INTEGER)",
             "SELECT COUNT(*) FROM USERS INTO :USER_COUNT;\n    SUSPEND;");
-        var script = _scriptHelper.CreateProcedureScript("GET_USER_COUNT", procedureSql);
         
         var scripts = new List<ScriptFile> { script };
         var existingDomains = new List<DomainMetadata>();
         var existingTables = new List<TableMetadata>();
+        var existingProcedures = new List<ProcedureMetadata>();
+
+        // Mock ExecuteRead for ProcedureDependencyValidator.GetCallingProcedures
+        _mockExecutor.ExecuteRead(Arg.Any<string>(), Arg.Any<Func<System.Data.IDataReader, string>>())
+            .Returns(new List<string>());
 
         // Act
-        _service.ProcessUpdate(scripts, existingDomains, existingTables);
+        _service.ProcessUpdate(scripts, existingDomains, existingTables, existingProcedures);
 
         // Assert
-        _transactionExecutor.Received().ExecuteNonQuery(Arg.Any<string>());
+        _mockExecutor.Received(1).ExecuteBatch(Arg.Any<List<string>>(), Arg.Any<Action<ISqlExecutor>>());
         
         var changes = _service.GetChanges();
         Assert.That(changes, Has.Count.EqualTo(1));
         Assert.That(changes[0].Type, Is.EqualTo(ChangeType.ProcedureModified));
         Assert.That(changes[0].ObjectName, Is.EqualTo("GET_USER_COUNT"));
+        Assert.That(changes[0].Details, Is.EqualTo("Wykonano skrypt"));
     }
 
     [Test]
-    public void ProcessUpdate_ProcedureFails_AddsManualReviewChange()
+    public void ProcessUpdate_WithExistingProcedureWithCreateStatement_SkipsProcedure()
     {
         // Arrange
-        var procedureSql = SqlTemplates.CreateSimpleProcedure("TEST_PROC");
-        var script = _scriptHelper.CreateProcedureScript("TEST_PROC", procedureSql);
+        var script = _scriptHelper.CreateSimpleProcedureScript("EXISTING_PROC");
         
         var scripts = new List<ScriptFile> { script };
         var existingDomains = new List<DomainMetadata>();
         var existingTables = new List<TableMetadata>();
+        var existingProcedures = new List<ProcedureMetadata>
+        {
+            TestDataBuilder.CreateProcedure("EXISTING_PROC", "CREATE PROCEDURE EXISTING_PROC AS BEGIN END")
+        };
 
-        _transactionExecutor
-            .When(x => x.ExecuteNonQuery(Arg.Any<string>()))
+        // Act
+        _service.ProcessUpdate(scripts, existingDomains, existingTables, existingProcedures);
+
+        // Assert
+        _mockExecutor.DidNotReceive().ExecuteBatch(Arg.Any<List<string>>(), Arg.Any<Action<ISqlExecutor>>());
+        Assert.That(_service.GetChanges(), Is.Empty);
+    }
+
+    [Test]
+    public void ProcessUpdate_ProcedureFails_ChangesAddedBeforeException()
+    {
+        // Arrange
+        var script = _scriptHelper.CreateSimpleProcedureScript("TEST_PROC");
+        
+        var scripts = new List<ScriptFile> { script };
+        var existingDomains = new List<DomainMetadata>();
+        var existingTables = new List<TableMetadata>();
+        var existingProcedures = new List<ProcedureMetadata>();
+
+        // Mock ExecuteRead for ProcedureDependencyValidator.GetCallingProcedures
+        _mockExecutor.ExecuteRead(Arg.Any<string>(), Arg.Any<Func<System.Data.IDataReader, string>>())
+            .Returns(new List<string>());
+
+        _mockExecutor
+            .When(x => x.ExecuteBatch(Arg.Any<List<string>>(), Arg.Any<Action<ISqlExecutor>>()))
             .Do(x => throw new Exception("Procedure error"));
 
         // Act & Assert
-        Assert.Throws<Exception>(() => _service.ProcessUpdate(scripts, existingDomains, existingTables));
+        Assert.Throws<Exception>(() => _service.ProcessUpdate(scripts, existingDomains, existingTables, existingProcedures));
         
+        // Changes are added before ExecuteBatch is called
         var changes = _service.GetChanges();
         Assert.That(changes, Has.Count.EqualTo(1));
-        Assert.That(changes[0].Type, Is.EqualTo(ChangeType.ManualReviewRequired));
+        Assert.That(changes[0].Type, Is.EqualTo(ChangeType.ProcedureModified));
         Assert.That(changes[0].ObjectName, Is.EqualTo("TEST_PROC"));
     }
 
@@ -307,14 +311,9 @@ public class DatabaseUpdateServiceTests
     public void ProcessUpdate_WithMultipleScriptTypes_ProcessesAllInCorrectOrder()
     {
         // Arrange
-        var domainSql = SqlTemplates.CreateDomain("D_TEST", "INTEGER");
-        var domainScript = _scriptHelper.CreateDomainScript("D_TEST", domainSql);
-        
-        var tableSql = SqlTemplates.CreateSimpleTable("TEST_TABLE", "ID INTEGER");
-        var tableScript = _scriptHelper.CreateTableScript("TEST_TABLE", tableSql);
-        
-        var procSql = SqlTemplates.CreateSimpleProcedure("TEST_PROC");
-        var procScript = _scriptHelper.CreateProcedureScript("TEST_PROC", procSql);
+        var domainScript = _scriptHelper.CreateDomainScriptFromTemplate("D_TEST", "INTEGER");
+        var tableScript = _scriptHelper.CreateTableScriptFromTemplate("TEST_TABLE", "ID INTEGER");
+        var procScript = _scriptHelper.CreateSimpleProcedureScript("TEST_PROC");
         
         var scripts = new List<ScriptFile>
         {
@@ -324,11 +323,19 @@ public class DatabaseUpdateServiceTests
         };
         var existingDomains = new List<DomainMetadata>();
         var existingTables = new List<TableMetadata>();
+        var existingProcedures = new List<ProcedureMetadata>();
+
+        // Mock ExecuteRead for ProcedureDependencyValidator.GetCallingProcedures
+        _mockExecutor.ExecuteRead(Arg.Any<string>(), Arg.Any<Func<System.Data.IDataReader, string>>())
+            .Returns(new List<string>());
 
         // Act
-        _service.ProcessUpdate(scripts, existingDomains, existingTables);
+        _service.ProcessUpdate(scripts, existingDomains, existingTables, existingProcedures);
 
         // Assert
+        // ExecuteBatch should be called once with all statements
+        _mockExecutor.Received(1).ExecuteBatch(Arg.Any<List<string>>(), Arg.Any<Action<ISqlExecutor>>());
+        
         var changes = _service.GetChanges();
         Assert.That(changes, Has.Count.EqualTo(3));
         
@@ -360,13 +367,12 @@ public class DatabaseUpdateServiceTests
     public void GetChanges_AfterProcessing_ReturnsAccumulatedChanges()
     {
         // Arrange
-        var domainSql = SqlTemplates.CreateDomain("D_CHANGES", "INTEGER");
-        var script = _scriptHelper.CreateDomainScript("D_CHANGES", domainSql);
+        var script = _scriptHelper.CreateDomainScriptFromTemplate("D_CHANGES", "INTEGER");
         
         var scripts = new List<ScriptFile> { script };
 
         // Act
-        _service.ProcessUpdate(scripts, new List<DomainMetadata>(), new List<TableMetadata>());
+        _service.ProcessUpdate(scripts, new List<DomainMetadata>(), new List<TableMetadata>(), new List<ProcedureMetadata>());
         var changes = _service.GetChanges();
 
         // Assert
@@ -382,8 +388,7 @@ public class DatabaseUpdateServiceTests
     public void ProcessUpdate_WithCaseInsensitiveDomainMatch_SkipsDomain()
     {
         // Arrange
-        var domainSql = SqlTemplates.CreateDomain("d_email", "VARCHAR(255)");
-        var script = _scriptHelper.CreateDomainScript("d_email", domainSql);
+        var script = _scriptHelper.CreateDomainScriptFromTemplate("d_email", "VARCHAR(255)");
         
         var scripts = new List<ScriptFile> { script };
         var existingDomains = new List<DomainMetadata>
@@ -392,10 +397,10 @@ public class DatabaseUpdateServiceTests
         };
 
         // Act
-        _service.ProcessUpdate(scripts, existingDomains, new List<TableMetadata>());
+        _service.ProcessUpdate(scripts, existingDomains, new List<TableMetadata>(), new List<ProcedureMetadata>());
 
         // Assert
-        _transactionExecutor.DidNotReceive().ExecuteNonQuery(Arg.Any<string>());
+        _mockExecutor.DidNotReceive().ExecuteBatch(Arg.Any<List<string>>(), Arg.Any<Action<ISqlExecutor>>());
         Assert.That(_service.GetChanges(), Is.Empty);
     }
 
@@ -403,8 +408,7 @@ public class DatabaseUpdateServiceTests
     public void ProcessUpdate_WithCaseInsensitiveTableMatch_ChecksColumns()
     {
         // Arrange
-        var tableSql = SqlTemplates.CreateSimpleTable("users", "ID INTEGER NOT NULL");
-        var script = _scriptHelper.CreateTableScript("users", tableSql);
+        var script = _scriptHelper.CreateTableScriptFromTemplate("users", "ID INTEGER NOT NULL");
         
         var scripts = new List<ScriptFile> { script };
         var existingTables = new List<TableMetadata>
@@ -415,11 +419,12 @@ public class DatabaseUpdateServiceTests
         };
 
         // Act
-        _service.ProcessUpdate(scripts, new List<DomainMetadata>(), existingTables);
+        _service.ProcessUpdate(scripts, new List<DomainMetadata>(), existingTables, new List<ProcedureMetadata>());
 
         // Assert - tabela nie powinna być tworzona ponownie
-        var containsCreateTable = Arg.Is<string>(s => s.Contains("CREATE TABLE"));
-        _transactionExecutor.DidNotReceive().ExecuteNonQuery(containsCreateTable);
+        _mockExecutor.DidNotReceive().ExecuteBatch(
+            Arg.Is<List<string>>(list => list.Any(s => s.Contains("CREATE TABLE"))),
+            Arg.Any<Action<ISqlExecutor>>());
     }
 
     #endregion

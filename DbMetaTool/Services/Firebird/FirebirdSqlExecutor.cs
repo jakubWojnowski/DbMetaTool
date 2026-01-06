@@ -1,5 +1,4 @@
 using DbMetaTool.Firebird;
-using DbMetaTool.Utilities;
 using FirebirdSql.Data.FirebirdClient;
 
 namespace DbMetaTool.Services.Firebird;
@@ -10,23 +9,75 @@ public class FirebirdSqlExecutor
 ) : ISqlExecutor, IDisposable
 {
     private FbConnection? _connection;
-    private FbTransaction? _transaction;
+    private FbTransaction? _readTransaction;
+    private FbTransaction? _currentWriteTransaction;
     private bool _disposed;
 
-    public void ExecuteInTransaction(Action<ISqlExecutor> action)
+    public void ExecuteBatch(List<string> sqlStatements, Action<ISqlExecutor>? validationCallback = null)
     {
-        if (action == null)
-            throw new ArgumentNullException(nameof(action));
+        if (sqlStatements is null)
+            throw new ArgumentNullException(nameof(sqlStatements));
+
+        if (sqlStatements.Count == 0)
+            return;
 
         EnsureConnection();
-
-        using var transaction = _connection!.BeginTransaction();
         
-        _transaction = transaction;
+        if (_readTransaction != null)
+        {
+            _readTransaction.Dispose();
+            
+            _readTransaction = null;
+        }
+
+        var options = new FbTransactionOptions
+        {
+            TransactionBehavior = FbTransactionBehavior.Concurrency | 
+                                  FbTransactionBehavior.Wait,
+            WaitTimeout = TimeSpan.FromSeconds(10)
+        };
+
+        using var transaction = _connection!.BeginTransaction(options);
 
         try
         {
-            action(this);
+            _currentWriteTransaction = transaction;
+
+            var statementIndex = 0;
+            foreach (var sql in sqlStatements.Where(sql => !string.IsNullOrWhiteSpace(sql)))
+            {
+                statementIndex++;
+                
+                using var command = _connection.CreateCommand();
+                
+                command.Transaction = transaction;
+                
+                command.CommandText = sql;
+                
+                try
+                {
+                    command.ExecuteNonQuery();
+                }
+                catch (FbException fbEx)
+                {
+                    var errorDetails = SqlErrorFormatter.FormatSqlError(fbEx, sql, statementIndex);
+                    
+                    throw new InvalidOperationException(errorDetails, fbEx);
+                }
+                catch (Exception ex)
+                {
+                    var errorMessage = $"Błąd podczas wykonywania statement #{statementIndex}: {ex.Message}";
+                    
+                    if (ex.InnerException != null)
+                    {
+                        errorMessage += $"\nSzczegóły: {ex.InnerException.Message}";
+                    }
+                    throw new InvalidOperationException(errorMessage, ex);
+                }
+            }
+            
+            validationCallback?.Invoke(this);
+            
             transaction.Commit();
         }
         catch
@@ -36,43 +87,11 @@ public class FirebirdSqlExecutor
         }
         finally
         {
-            _transaction = null;
+            _currentWriteTransaction = null;
         }
     }
 
-    public void ExecuteNonQuery(string sql)
-    {
-        if (string.IsNullOrWhiteSpace(sql))
-            throw new ArgumentException("SQL cannot be empty", nameof(sql));
-
-        EnsureConnection();
-
-        using var command = _connection!.CreateCommand();
-
-        command.Transaction = _transaction;
-
-        command.CommandText = sql;
-
-        command.ExecuteNonQuery();
-    }
-
-    public void ExecuteScript(string script)
-    {
-        if (string.IsNullOrWhiteSpace(script))
-            throw new ArgumentException("Script cannot be empty", nameof(script));
-
-        var statements = SqlScriptParser.ParseScript(script);
-
-        foreach (var statement in statements)
-        {
-            if (!string.IsNullOrWhiteSpace(statement))
-            {
-                ExecuteNonQuery(statement);
-            }
-        }
-    }
-
-    public List<T> ExecuteQuery<T>(string sql, Func<System.Data.IDataReader, T> mapper)
+    public List<T> ExecuteRead<T>(string sql, Func<System.Data.IDataReader, T> mapper)
     {
         if (string.IsNullOrWhiteSpace(sql))
             throw new ArgumentException("SQL cannot be empty", nameof(sql));
@@ -81,19 +100,59 @@ public class FirebirdSqlExecutor
             throw new ArgumentNullException(nameof(mapper));
 
         EnsureConnection();
+        
+        var transactionToUse = _currentWriteTransaction;
+
+        if (transactionToUse == null)
+        {
+            if (_readTransaction == null)
+            {
+                var options = new FbTransactionOptions
+                {
+                    TransactionBehavior = FbTransactionBehavior.Concurrency | 
+                                          FbTransactionBehavior.Wait | 
+                                          FbTransactionBehavior.Read
+                };
+
+                _readTransaction = _connection!.BeginTransaction(options);
+            }
+
+            transactionToUse = _readTransaction;
+        }
 
         var results = new List<T>();
 
         using var command = _connection!.CreateCommand();
-
-        command.Transaction = _transaction;
-
+        
+        command.Transaction = transactionToUse;
+        
         command.CommandText = sql;
 
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
+        try
         {
-            results.Add(mapper(reader));
+            using var reader = command.ExecuteReader();
+            
+            while (reader.Read())
+            {
+                results.Add(mapper(reader));
+            }
+        }
+        catch (FbException fbEx)
+        {
+            var errorDetails = SqlErrorFormatter.FormatSqlError(fbEx, sql, 0);
+            
+            throw new InvalidOperationException(errorDetails, fbEx);
+        }
+        catch (Exception ex)
+        {
+            var errorMessage = $"Błąd podczas wykonywania zapytania: {ex.Message}";
+            
+            if (ex.InnerException != null)
+            {
+                errorMessage += $"\nSzczegóły: {ex.InnerException.Message}";
+            }
+            
+            throw new InvalidOperationException(errorMessage, ex);
         }
 
         return results;
@@ -115,12 +174,11 @@ public class FirebirdSqlExecutor
     {
         if (_disposed)
             return;
-
-        _transaction?.Dispose();
+        
+        _readTransaction?.Dispose();
         
         _connection?.Dispose();
 
         _disposed = true;
     }
 }
-

@@ -1,4 +1,3 @@
-using DbMetaTool.Firebird;
 using DbMetaTool.Models;
 using DbMetaTool.Models.results;
 using DbMetaTool.Services.Firebird;
@@ -6,13 +5,25 @@ using DbMetaTool.Services.SqlScripts;
 using DbMetaTool.Services.Validation;
 using DbMetaTool.Utilities;
 
-namespace DbMetaTool.Services.Build;
+namespace DbMetaTool.Tests.TestHelpers;
 
-public static class DatabaseBuildService
+public class DatabaseBuildServiceTestWrapper
 {
-    public static BuildResult BuildDatabase(string databaseFilePath, string scriptsDirectory)
+    private readonly ISqlExecutor _sqlExecutor;
+    private readonly Action<string> _databaseCreatorStub;
+
+    public DatabaseBuildServiceTestWrapper(
+        ISqlExecutor sqlExecutor,
+        Action<string> databaseCreatorStub)
     {
-        CreateEmptyDatabase(databaseFilePath);
+        _sqlExecutor = sqlExecutor ?? throw new ArgumentNullException(nameof(sqlExecutor));
+        _databaseCreatorStub = databaseCreatorStub ?? throw new ArgumentNullException(nameof(databaseCreatorStub));
+    }
+
+    public BuildResult BuildDatabase(string databaseFilePath, string scriptsDirectory)
+    {
+        _databaseCreatorStub(databaseFilePath);
+        Console.WriteLine("✓ Utworzono pustą bazę danych");
 
         var scripts = ScriptLoader.LoadScriptsInOrder(scriptsDirectory);
         
@@ -27,27 +38,13 @@ public static class DatabaseBuildService
         }
 
         DisplayScriptsSummary(scripts);
-
-        var connectionString = FirebirdConnectionFactory.BuildConnectionString(databaseFilePath);
-        
-        var connectionFactory = new FirebirdConnectionFactory(connectionString);
-
-        using var sqlExecutor = new FirebirdSqlExecutor(connectionFactory);
-
-        ExecuteScripts(sqlExecutor, scripts);
+        ExecuteScripts(_sqlExecutor, scripts);
         
         return new BuildResult(
             ExecutedCount: scripts.Count,
             DomainScripts: scripts.Count(s => s.Type == ScriptType.Domain),
             TableScripts: scripts.Count(s => s.Type == ScriptType.Table),
             ProcedureScripts: scripts.Count(s => s.Type == ScriptType.Procedure));
-    }
-
-    private static void CreateEmptyDatabase(string databaseFilePath)
-    {
-        FirebirdDatabaseCreator.CreateDatabase(databaseFilePath);
-        
-        Console.WriteLine("✓ Utworzono pustą bazę danych");
     }
 
     private static void DisplayScriptsSummary(List<ScriptFile> scripts)
@@ -86,3 +83,4 @@ public static class DatabaseBuildService
         }
     }
 }
+

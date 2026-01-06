@@ -10,5 +10,3 @@ public record DomainMetadata(
     string? DefaultValue,
     string? CheckConstraint
 );
-
-
