@@ -163,9 +163,6 @@ Wykonywanie: Procedure/GET_USER_COUNT.sql... ✓
 
 === Podsumowanie ===
 Wykonano pomyślnie: 5
-
-Connection String:
-DataSource=localhost;Port=3050;Database=/var/lib/firebird/data/myapp/myapp.fdb;User=SYSDBA;Password=masterkey;Charset=UTF8;ServerType=0;Dialect=3
 ```
 
 #### ⚠️ Ważne
@@ -200,8 +197,8 @@ dotnet run --project DbMetaTool export-scripts \
 
 ```bash
 dotnet run --project DbMetaTool export-scripts \
-  --connection-string "DataSource=localhost;Port=3050;Database=/var/lib/firebird/data/myapp/myapp.fdb;User=SYSDBA;Password=masterkey" \
-  --output-dir "./output/myapp"
+  --connection-string "DataSource=localhost;Port=3050;Database=/var/lib/firebird/data/database1.fdb;User=SYSDBA;Password=masterkey" \
+  --output-dir "./output/database1"
 ```
 
 #### Wyjście
@@ -210,7 +207,7 @@ dotnet run --project DbMetaTool export-scripts \
 === Eksport metadanych z bazy Firebird ===
 
 Connection String: DataSource=localhost;Port=3050;Database=...
-Katalog wyjściowy: ./output/myapp
+Katalog wyjściowy: ./output/database1
 
 Pobieranie metadanych...
 ✓ Znaleziono 2 domen
@@ -223,7 +220,7 @@ Generowanie skryptów SQL...
 ✓ Zapisano 1 skryptów procedur
 
 === Podsumowanie ===
-Katalog wyjściowy: D:\Projects\DbMetaTool\output\myapp
+Katalog wyjściowy: D:\Projects\DbMetaTool\output\database1
 Łącznie plików: 6
 
 Skrypty zostały wyeksportowane pomyślnie.
@@ -232,7 +229,7 @@ Skrypty zostały wyeksportowane pomyślnie.
 #### Struktura wygenerowanych plików
 
 ```
-output/myapp/
+output/database1/
 ├── domains/
 │   ├── D_EMAIL.sql
 │   └── D_TIMESTAMP.sql
@@ -282,7 +279,7 @@ dotnet run --project DbMetaTool update-db \
 
 ```bash
 dotnet run --project DbMetaTool update-db \
-  --connection-string "DataSource=localhost;Port=3050;Database=/var/lib/firebird/data/myapp/myapp.fdb;User=SYSDBA;Password=masterkey" \
+  --connection-string "DataSource=localhost;Port=3050;Database=/var/lib/firebird/data/database1.fdb;User=SYSDBA;Password=masterkey" \
   --scripts-dir "./scripts"
 ```
 
