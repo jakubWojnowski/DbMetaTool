@@ -504,20 +504,6 @@ DbMetaTool implementuje szereg mechanizmów zapewniających bezpieczeństwo i in
 - Pozwala to narzędziu poczekać na zwolnienie blokady przez inne sesje
 - Zapobiega błędom "object in use" podczas aktualizacji metadanych na "żywym" systemie
 
-### Przykładowy scenariusz bezpieczeństwa
-
-```
-1. Użytkownik modyfikuje procedurę CREATE_EMPLOYEE (dodaje nowy parametr)
-2. Narzędzie ostrzega: "Procedura jest wywoływana przez: IMPORT_EMPLOYEES_DATA"
-3. Narzędzie wykonuje zmianę w transakcji
-4. Walidacja BLR wykrywa, że IMPORT_EMPLOYEES_DATA ma nieprawidłowy BLR
-5. Transakcja jest automatycznie wycofywana (ROLLBACK)
-6. Baza pozostaje w poprzednim, działającym stanie
-7. Użytkownik otrzymuje czytelny komunikat o błędzie i może poprawić skrypty
-```
-
----
-
 ## 📁 Struktura projektu
 
 ```
