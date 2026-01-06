@@ -174,7 +174,7 @@ public class DatabaseUpdater
                 using var connection = _connectionFactory.CreateAndOpenConnection();
                 using var command = connection.CreateCommand();
 
-                var statements = SplitProcedureScript(createOrAlterScript);
+                var statements = SqlScriptParser.SplitScriptIntoStatements(createOrAlterScript);
                 foreach (var statement in statements)
                 {
                     if (string.IsNullOrWhiteSpace(statement))
@@ -218,94 +218,6 @@ public class DatabaseUpdater
         return string.Join(Environment.NewLine, result);
     }
 
-    private static List<string> SplitProcedureScript(string scriptContent)
-    {
-        var statements = new List<string>();
-        var lines = scriptContent.Split(new[] { '\r', '\n' }, StringSplitOptions.None);
-        var currentStatement = new List<string>();
-        var terminator = ";";
-        var isProcedure = false;
-
-        foreach (var line in lines)
-        {
-            var trimmedLine = line.Trim();
-
-            if (string.IsNullOrWhiteSpace(trimmedLine))
-            {
-                if (currentStatement.Count > 0)
-                {
-                    currentStatement.Add(line);
-                }
-                continue;
-            }
-
-            if (trimmedLine.StartsWith("CREATE PROCEDURE", StringComparison.OrdinalIgnoreCase) ||
-                trimmedLine.StartsWith("CREATE OR ALTER PROCEDURE", StringComparison.OrdinalIgnoreCase))
-            {
-                isProcedure = true;
-                terminator = "^";
-            }
-
-            if (trimmedLine == "^")
-            {
-                if (currentStatement.Count > 0)
-                {
-                    var statement = string.Join(Environment.NewLine, currentStatement).Trim();
-                    if (!string.IsNullOrWhiteSpace(statement))
-                    {
-                        statements.Add(statement);
-                    }
-                    currentStatement.Clear();
-                }
-                isProcedure = false;
-                terminator = ";";
-                continue;
-            }
-
-            if (isProcedure)
-            {
-                currentStatement.Add(line);
-            }
-            else if (trimmedLine.EndsWith(";"))
-            {
-                currentStatement.Add(line.TrimEnd(';'));
-                var statement = string.Join(Environment.NewLine, currentStatement).Trim();
-                if (!string.IsNullOrWhiteSpace(statement))
-                {
-                    statements.Add(statement + ";");
-                }
-                currentStatement.Clear();
-            }
-            else
-            {
-                currentStatement.Add(line);
-            }
-        }
-
-        if (currentStatement.Count > 0)
-        {
-            var statement = string.Join(Environment.NewLine, currentStatement).Trim();
-            if (!string.IsNullOrWhiteSpace(statement))
-            {
-                if (isProcedure && !statement.EndsWith("^"))
-                {
-                    // Jeśli to procedura i nie ma terminatora, dodaj go
-                    statements.Add(statement);
-                }
-                else if (!statement.EndsWith(";") && terminator == ";")
-                {
-                    statement += ";";
-                    statements.Add(statement);
-                }
-                else
-                {
-                    statements.Add(statement);
-                }
-            }
-        }
-
-        return statements;
-    }
 
     private static List<ColumnDefinition> ParseColumnDefinitionsFromCreateTableScript(string scriptContent)
     {
