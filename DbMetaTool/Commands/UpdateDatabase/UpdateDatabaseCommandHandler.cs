@@ -234,7 +234,7 @@ public static class UpdateDatabaseCommandHandler
                 changes.Add(new DatabaseChange(
                     ChangeType.ProcedureModified,
                     procedureName,
-                    "CREATE OR ALTER"));
+                    "Wykonano skrypt"));
                 Console.WriteLine("✓");
             }
             catch (Exception ex)
@@ -333,17 +333,32 @@ public static class UpdateDatabaseCommandHandler
 
     private static ColumnMetadata? ParseColumnDefinition(string line, int position)
     {
-        line = line.TrimEnd(',');
-        var parts = line.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        line = line.TrimEnd(',').Trim();
+        
+        var notNullIndex = line.IndexOf("NOT NULL", StringComparison.OrdinalIgnoreCase);
+        var defaultIndex = line.IndexOf("DEFAULT", StringComparison.OrdinalIgnoreCase);
+        
+        var endOfTypeIndex = line.Length;
+        if (notNullIndex > 0)
+        {
+            endOfTypeIndex = Math.Min(endOfTypeIndex, notNullIndex);
+        }
+        if (defaultIndex > 0)
+        {
+            endOfTypeIndex = Math.Min(endOfTypeIndex, defaultIndex);
+        }
 
-        if (parts.Length < 2)
+        var columnDefinition = line.Substring(0, endOfTypeIndex).Trim();
+        
+        var firstSpaceIndex = columnDefinition.IndexOf(' ');
+        if (firstSpaceIndex < 0)
         {
             return null;
         }
 
-        var name = parts[0];
-        var dataType = parts[1];
-        var isNullable = !line.Contains("NOT NULL", StringComparison.OrdinalIgnoreCase);
+        var name = columnDefinition.Substring(0, firstSpaceIndex).Trim();
+        var dataType = columnDefinition.Substring(firstSpaceIndex + 1).Trim();
+        var isNullable = notNullIndex < 0;
 
         return new ColumnMetadata(
             Position: position,

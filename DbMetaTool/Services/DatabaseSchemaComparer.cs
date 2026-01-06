@@ -49,31 +49,18 @@ public static class DatabaseSchemaComparer
         return sb.ToString();
     }
 
-    public static string GenerateCreateOrAlterProcedure(ProcedureMetadata procedure)
-    {
-        if (string.IsNullOrWhiteSpace(procedure.Source))
-        {
-            return $"-- Cannot create/alter procedure {procedure.Name}: no source provided";
-        }
-
-        var source = procedure.Source.Trim();
-        
-        if (source.ToUpperInvariant().StartsWith("CREATE PROCEDURE"))
-        {
-            source = "CREATE OR ALTER PROCEDURE" + source.Substring("CREATE PROCEDURE".Length);
-        }
-        else if (!source.ToUpperInvariant().StartsWith("CREATE OR ALTER"))
-        {
-            return $"CREATE OR ALTER PROCEDURE {procedure.Name}\n{source}";
-        }
-
-        return source;
-    }
-
     private static bool AreColumnsEqual(ColumnMetadata col1, ColumnMetadata col2)
     {
-        return col1.DataType.Equals(col2.DataType, StringComparison.OrdinalIgnoreCase) &&
+        var dataType1 = NormalizeDataType(col1.DataType);
+        var dataType2 = NormalizeDataType(col2.DataType);
+        
+        return dataType1.Equals(dataType2, StringComparison.OrdinalIgnoreCase) &&
                col1.IsNullable == col2.IsNullable;
+    }
+
+    private static string NormalizeDataType(string dataType)
+    {
+        return dataType.Replace(" ", "").ToUpperInvariant();
     }
 }
 

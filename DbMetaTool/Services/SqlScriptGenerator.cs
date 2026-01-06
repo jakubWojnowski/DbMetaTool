@@ -73,14 +73,7 @@ public static class SqlScriptGenerator
 
         if (!string.IsNullOrWhiteSpace(procedure.Source))
         {
-            var source = procedure.Source.Trim();
-            
-            if (source.StartsWith("CREATE PROCEDURE", StringComparison.OrdinalIgnoreCase))
-            {
-                source = "CREATE OR ALTER PROCEDURE" + source.Substring("CREATE PROCEDURE".Length);
-            }
-            
-            sb.AppendLine(source);
+            sb.AppendLine(procedure.Source.Trim());
             sb.AppendLine("^");
         }
         else
