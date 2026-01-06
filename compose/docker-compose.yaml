@@ -10,5 +10,9 @@ services:
       FIREBIRD_USER: SYSDBA
       FIREBIRD_PASSWORD: masterkey
     volumes:
-      - ./data:/var/lib/firebird/data
+      - firebird-data:/var/lib/firebird/data
     restart: unless-stopped
+
+volumes:
+  firebird-data:
+    driver: local
