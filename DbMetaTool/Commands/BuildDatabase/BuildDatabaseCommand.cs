@@ -1,6 +1,6 @@
 namespace DbMetaTool.Commands.BuildDatabase;
 
 public record BuildDatabaseCommand(
-    string DatabaseDirectory,
+    string DatabasePath,
     string ScriptsDirectory
 );
