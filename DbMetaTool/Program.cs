@@ -1,5 +1,9 @@
 ﻿using System;
 using System.IO;
+using DbMetaTool.Commands;
+using DbMetaTool.Commands.BuildDatabase;
+using DbMetaTool.Commands.ExportMetadata;
+using DbMetaTool.Commands.UpdateDatabase;
 
 namespace DbMetaTool
 {
@@ -70,7 +74,7 @@ namespace DbMetaTool
 
         private static string GetArgValue(string[] args, string name)
         {
-            int idx = Array.IndexOf(args, name);
+            var idx = Array.IndexOf(args, name);
             if (idx == -1 || idx + 1 >= args.Length)
                 throw new ArgumentException($"Brak wymaganego parametru {name}");
             return args[idx + 1];
@@ -87,7 +91,7 @@ namespace DbMetaTool
             //    (tylko domeny, tabele, procedury).
             // 3) Obsłuż błędy i wyświetl raport.
             
-            Commands.BuildDatabaseCommand.Execute(databaseDirectory, scriptsDirectory);
+            BuildDatabaseCommandHandler.Handle(new BuildDatabaseCommand(databaseDirectory, scriptsDirectory));
         }
 
         /// <summary>
@@ -100,7 +104,7 @@ namespace DbMetaTool
             // 2) Pobierz metadane domen, tabel (z kolumnami) i procedur.
             // 3) Wygeneruj pliki .sql / .json / .txt w outputDirectory.
             
-            Commands.ExportMetadataCommand.Execute(connectionString, outputDirectory);
+            ExportMetadataCommandHandler.Handle(new ExportMetadataCommand(connectionString, outputDirectory));
         }
 
         /// <summary>
@@ -113,7 +117,7 @@ namespace DbMetaTool
             // 2) Wykonaj skrypty z katalogu scriptsDirectory (tylko obsługiwane elementy).
             // 3) Zadbaj o poprawną kolejność i bezpieczeństwo zmian.
             
-            Commands.UpdateDatabaseCommand.Execute(connectionString, scriptsDirectory);
+            UpdateDatabaseCommandHandler.Handle(new UpdateDatabaseCommand(connectionString, scriptsDirectory));
         }
     }
 }

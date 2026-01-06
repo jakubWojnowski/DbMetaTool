@@ -1,16 +1,7 @@
-using FirebirdSql.Data.FirebirdClient;
-
 namespace DbMetaTool.Firebird;
 
-public class ScriptExecutor
+public class ScriptExecutor(FirebirdConnectionFactory connectionFactory)
 {
-    private readonly FirebirdConnectionFactory _connectionFactory;
-
-    public ScriptExecutor(FirebirdConnectionFactory connectionFactory)
-    {
-        _connectionFactory = connectionFactory ?? throw new ArgumentNullException(nameof(connectionFactory));
-    }
-
     public List<ExecutionResult> ExecuteScriptsFromDirectory(string scriptsDirectory)
     {
         var results = new List<ExecutionResult>();
@@ -46,7 +37,7 @@ public class ScriptExecutor
             var scriptContent = File.ReadAllText(scriptPath);
             var statements = SplitScriptIntoStatements(scriptContent);
 
-            using var connection = _connectionFactory.CreateAndOpenConnection();
+            using var connection = connectionFactory.CreateAndOpenConnection();
 
             foreach (var statement in statements)
             {
