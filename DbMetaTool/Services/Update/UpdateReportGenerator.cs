@@ -1,6 +1,6 @@
 using DbMetaTool.Models;
 
-namespace DbMetaTool.Services;
+namespace DbMetaTool.Services.Update;
 
 public static class UpdateReportGenerator
 {

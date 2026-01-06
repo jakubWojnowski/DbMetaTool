@@ -1,7 +1,7 @@
-using DbMetaTool.Models;
 using System.Text;
+using DbMetaTool.Models;
 
-namespace DbMetaTool.Services;
+namespace DbMetaTool.Services.Metadata;
 
 public static class SqlScriptGenerator
 {

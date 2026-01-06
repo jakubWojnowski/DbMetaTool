@@ -1,7 +1,6 @@
 using DbMetaTool.Models.results;
-using DbMetaTool.Services;
 
-namespace DbMetaTool.Services;
+namespace DbMetaTool.Services.Export;
 
 public static class ExportReportGenerator
 {

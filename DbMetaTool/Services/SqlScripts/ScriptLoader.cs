@@ -1,6 +1,6 @@
 using DbMetaTool.Models;
 
-namespace DbMetaTool.Services;
+namespace DbMetaTool.Services.SqlScripts;
 
 public static class ScriptLoader
 {
@@ -15,7 +15,9 @@ public static class ScriptLoader
         var scripts = new List<ScriptFile>();
 
         LoadScriptsOfType(scripts, scriptsDirectory, "domains", ScriptType.Domain);
+        
         LoadScriptsOfType(scripts, scriptsDirectory, "tables", ScriptType.Table);
+        
         LoadScriptsOfType(scripts, scriptsDirectory, "procedures", ScriptType.Procedure);
 
         return scripts;

@@ -14,6 +14,7 @@ public static class DatabasePathHelper
         var isUnixPath = databaseName.StartsWith("/");
 
         string databaseDirectory;
+        
         string databaseFilePath;
 
         if (isUnixPath)
@@ -22,28 +23,34 @@ public static class DatabasePathHelper
             if (lastSlashIndex > 0)
             {
                 databaseDirectory = databaseName[..lastSlashIndex];
+                
                 var fileName = databaseName[(lastSlashIndex + 1)..];
+                
                 databaseFilePath = $"{databaseDirectory}/{fileName}.fdb";
             }
             else
             {
                 databaseDirectory = "/var/lib/firebird/data";
+                
                 databaseFilePath = $"{databaseDirectory}/{databaseName}.fdb";
             }
         }
         else
         {
-            bool isAbsolutePath = Path.IsPathRooted(databaseName);
+            var isAbsolutePath = Path.IsPathRooted(databaseName);
             
             if (isAbsolutePath)
             {
                 databaseDirectory = Path.GetDirectoryName(databaseName) ?? ".";
+                
                 var fileName = Path.GetFileName(databaseName);
+                
                 databaseFilePath = Path.Combine(databaseDirectory, $"{fileName}.fdb");
             }
             else
             {
                 databaseDirectory = Path.GetFullPath("./databases");
+                
                 databaseFilePath = Path.Combine(databaseDirectory, $"{databaseName}.fdb");
             }
             

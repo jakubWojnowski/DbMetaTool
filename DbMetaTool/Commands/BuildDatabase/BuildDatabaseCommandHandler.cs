@@ -1,4 +1,5 @@
 ﻿using DbMetaTool.Services;
+using DbMetaTool.Services.Build;
 using DbMetaTool.Utilities;
 
 namespace DbMetaTool.Commands.BuildDatabase;

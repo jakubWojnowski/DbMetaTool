@@ -32,15 +32,12 @@ public class FirebirdConnectionFactory
         return builder.ToString();
     }
 
-    public FbConnection CreateConnection()
-    {
-        return new FbConnection(_connectionString);
-    }
-
     public FbConnection CreateAndOpenConnection()
     {
         var connection = new FbConnection(_connectionString);
+        
         connection.Open();
+        
         return connection;
     }
 }

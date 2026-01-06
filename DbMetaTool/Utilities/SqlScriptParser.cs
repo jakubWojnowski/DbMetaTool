@@ -8,9 +8,11 @@ public static class SqlScriptParser
             return [];
 
         var statements = new List<string>();
+        
         var lines = script.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries);
         
         var currentTerminator = ";";
+        
         var currentStatement = new List<string>();
 
         foreach (var line in lines)
@@ -28,7 +30,9 @@ public static class SqlScriptParser
                 if (currentStatement.Count > 0)
                 {
                     var statement = string.Join(Environment.NewLine, currentStatement);
+                    
                     statements.Add(statement);
+                    
                     currentStatement.Clear();
                 }
 
@@ -36,7 +40,9 @@ public static class SqlScriptParser
                 if (parts.Length >= 3)
                 {
                     var newTerminator = parts[2];
+                    
                     newTerminator = newTerminator.TrimEnd(currentTerminator.ToCharArray());
+                    
                     newTerminator = newTerminator.TrimEnd(';');
                     
                     if (!string.IsNullOrWhiteSpace(newTerminator))
@@ -63,7 +69,9 @@ public static class SqlScriptParser
                 if (currentStatement.Count > 0)
                 {
                     var statement = string.Join(Environment.NewLine, currentStatement);
+                    
                     statements.Add(statement);
+                    
                     currentStatement.Clear();
                 }
             }
@@ -76,6 +84,7 @@ public static class SqlScriptParser
         if (currentStatement.Count > 0)
         {
             var statement = string.Join(Environment.NewLine, currentStatement);
+            
             statements.Add(statement);
         }
 

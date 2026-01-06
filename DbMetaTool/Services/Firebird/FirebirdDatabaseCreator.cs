@@ -1,7 +1,7 @@
-using FirebirdSql.Data.FirebirdClient;
 using DbMetaTool.Configuration;
+using FirebirdSql.Data.FirebirdClient;
 
-namespace DbMetaTool.Services;
+namespace DbMetaTool.Services.Firebird;
 
 public static class FirebirdDatabaseCreator
 {
