@@ -1,7 +1,7 @@
+using DbMetaTool.Databases;
+using DbMetaTool.Databases.Firebird;
 using DbMetaTool.Models;
-using DbMetaTool.Services.Firebird;
 using DbMetaTool.Services.SqlScripts;
-using DbMetaTool.Services.Validation;
 using DbMetaTool.Utilities;
 
 namespace DbMetaTool.Services.Update;
@@ -32,7 +32,9 @@ public class DatabaseUpdateService(
         
         if (_allStatements.Count > 0)
         {
-            await mainExecutor.ExecuteBatchAsync(_allStatements, ProcedureBlrValidator.ValidateProcedureIntegrityAsync);
+            await mainExecutor.ExecuteBatchAsync(
+                _allStatements, 
+                FirebirdProcedureBlrValidator.ValidateProcedureIntegrityAsync);
         }
     }
 
@@ -226,7 +228,7 @@ public class DatabaseUpdateService(
     {
         Console.Write($"  Procedura {procedureName}... ");
         
-        var callingProcedures = await ProcedureDependencyValidator.GetCallingProceduresAsync(mainExecutor, procedureName);
+        var callingProcedures = await FirebirdProcedureDependencyValidator.GetCallingProceduresAsync(mainExecutor, procedureName);
         
         if (callingProcedures.Count > 0)
         {

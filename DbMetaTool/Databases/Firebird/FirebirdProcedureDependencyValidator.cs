@@ -1,9 +1,9 @@
 using System.Text;
 using DbMetaTool.Databases;
 
-namespace DbMetaTool.Services.Validation;
+namespace DbMetaTool.Databases.Firebird;
 
-public static class ProcedureDependencyValidator
+public static class FirebirdProcedureDependencyValidator
 {
     public static Task<List<string>> GetCallingProceduresAsync(ISqlExecutor executor, string procedureName)
     {
@@ -20,4 +20,3 @@ public static class ProcedureDependencyValidator
             reader["RDB$DEPENDENT_NAME"].ToString()!.Trim());
     }
 }
-

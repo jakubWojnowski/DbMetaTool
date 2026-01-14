@@ -1,17 +1,11 @@
+using System.Data;
 using DbMetaTool.Configuration;
 using FirebirdSql.Data.FirebirdClient;
 
-namespace DbMetaTool.Firebird;
+namespace DbMetaTool.Databases.Firebird;
 
-public class FirebirdConnectionFactory
+public static class FirebirdConnectionFactory
 {
-    private readonly string _connectionString;
-
-    public FirebirdConnectionFactory(string connectionString)
-    {
-        _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
-    }
-
     public static string BuildConnectionString(string databasePath)
     {
         if (string.IsNullOrWhiteSpace(databasePath))
@@ -32,18 +26,12 @@ public class FirebirdConnectionFactory
         return builder.ToString();
     }
 
-    public FbConnection CreateAndOpenConnection()
+    public static async Task<IDbConnection> CreateAndOpenConnectionAsync(string connectionString)
     {
-        var connection = new FbConnection(_connectionString);
-        
-        connection.Open();
-        
-        return connection;
-    }
+        if (string.IsNullOrWhiteSpace(connectionString))
+            throw new ArgumentException("Connection string cannot be empty", nameof(connectionString));
 
-    public async Task<FbConnection> CreateAndOpenConnectionAsync()
-    {
-        var connection = new FbConnection(_connectionString);
+        var connection = new FbConnection(connectionString);
         
         await connection.OpenAsync();
         

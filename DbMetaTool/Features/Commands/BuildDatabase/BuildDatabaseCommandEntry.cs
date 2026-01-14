@@ -1,4 +1,5 @@
 using System.CommandLine;
+using DbMetaTool.Databases;
 using DbMetaTool.Features.Commands;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -8,7 +9,13 @@ public static class BuildDatabaseCommandEntry
 {
     public static RootCommand MapBuildDatabase(this RootCommand rootCommand, IServiceProvider serviceProvider)
     {
-        var command = new Command("build-db", "Buduje nową bazę danych Firebird z skryptów");
+        var command = new Command("build-db", "Buduje nową bazę danych z skryptów");
+
+        var databaseTypeOption = new Option<DatabaseType>("--database-type")
+        {
+            Description = "Typ bazy danych (Firebird, SqlServer, PostgreSQL, etc.)",
+            Required = true
+        };
 
         var dbDirOption = new Option<string>("--db-dir")
         {
@@ -22,16 +29,18 @@ public static class BuildDatabaseCommandEntry
             Required = true
         };
 
+        command.Options.Add(databaseTypeOption);
         command.Options.Add(dbDirOption);
         command.Options.Add(scriptsDirOption);
 
         command.SetAction(async (parseResult, cancellationToken) =>
         {
+            var databaseType = parseResult.GetValue(databaseTypeOption);
             var dbDir = parseResult.GetValue(dbDirOption);
             var scriptsDir = parseResult.GetValue(scriptsDirOption);
             var handler = serviceProvider.GetRequiredService<IAsyncHandler<BuildDatabaseCommand, BuildDatabaseResponse>>();
             
-            await BuildDatabaseAsync(dbDir!, scriptsDir!, handler, cancellationToken);
+            await BuildDatabaseAsync(databaseType, dbDir!, scriptsDir!, handler, cancellationToken);
         });
 
         rootCommand.Subcommands.Add(command);
@@ -40,12 +49,14 @@ public static class BuildDatabaseCommandEntry
     }
 
     private static async Task BuildDatabaseAsync(
+        DatabaseType databaseType,
         string dbDir,
         string scriptsDir,
         IAsyncHandler<BuildDatabaseCommand, BuildDatabaseResponse> handler,
         CancellationToken cancellationToken = default)
     {
         var command = new BuildDatabaseCommand(
+            DatabaseType: databaseType,
             DatabasePath: dbDir,
             ScriptsDirectory: scriptsDir);
 

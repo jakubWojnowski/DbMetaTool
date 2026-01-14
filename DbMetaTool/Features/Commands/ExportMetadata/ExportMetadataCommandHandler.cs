@@ -1,10 +1,10 @@
-using DbMetaTool.Firebird;
+using DbMetaTool.Databases;
 using DbMetaTool.Services.Export;
-using DbMetaTool.Services.Firebird;
 
 namespace DbMetaTool.Features.Commands.ExportMetadata;
 
 public class ExportMetadataCommandHandler(
+    IDatabaseStrategyService strategyService,
     IMetadataExportService exportService,
     IExportReportGenerator reportGenerator) : IAsyncHandler<ExportMetadataCommand, ExportMetadataResponse>
 {
@@ -14,15 +14,13 @@ public class ExportMetadataCommandHandler(
     {
         try
         {
-            Console.WriteLine("=== Eksport metadanych z bazy Firebird ===");
+            Console.WriteLine($"=== Eksport metadanych z bazy {request.DatabaseType} ===");
             Console.WriteLine();
             Console.WriteLine($"Connection String: {request.ConnectionString}");
             Console.WriteLine($"Katalog wyjściowy: {request.OutputDirectory}");
             Console.WriteLine();
 
-            var connectionFactory = new FirebirdConnectionFactory(request.ConnectionString);
-            
-            using var sqlExecutor = new FirebirdSqlExecutor(connectionFactory);
+            using var sqlExecutor = strategyService.GetSqlExecutor(request.DatabaseType, request.ConnectionString);
 
             var result = await exportService.ExportAll(sqlExecutor, request.OutputDirectory, cancellationToken);
 

@@ -1,9 +1,9 @@
 using System.Text;
-using DbMetaTool.Services.Firebird;
+using DbMetaTool.Databases;
 
-namespace DbMetaTool.Services.Validation;
+namespace DbMetaTool.Databases.Firebird;
 
-public static class ProcedureBlrValidator
+public static class FirebirdProcedureBlrValidator
 {
     private static Task<List<string>> GetInvalidBlrProceduresAsync(ISqlExecutor executor)
     {
@@ -39,8 +39,7 @@ public static class ProcedureBlrValidator
         }
         Console.WriteLine();
 
-        var errorMessage = SqlErrorFormatter.FormatValidationError(invalidProcedures);
+        var errorMessage = FirebirdSqlErrorFormatter.FormatValidationError(invalidProcedures);
         throw new InvalidOperationException(errorMessage);
     }
 }
-

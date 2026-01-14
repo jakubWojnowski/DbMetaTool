@@ -1,4 +1,5 @@
 using System.CommandLine;
+using DbMetaTool.Databases;
 using DbMetaTool.Features.Commands;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -8,11 +9,17 @@ public static class UpdateDatabaseCommandEntry
 {
     public static RootCommand MapUpdateDatabase(this RootCommand rootCommand, IServiceProvider serviceProvider)
     {
-        var command = new Command("update-db", "Aktualizuje istniejącą bazę danych Firebird skryptami SQL");
+        var command = new Command("update-db", "Aktualizuje istniejącą bazę danych skryptami SQL");
+
+        var databaseTypeOption = new Option<DatabaseType>("--database-type")
+        {
+            Description = "Typ bazy danych (Firebird, SqlServer, PostgreSQL, etc.)",
+            Required = true
+        };
 
         var connectionStringOption = new Option<string>("--connection-string")
         {
-            Description = "Connection string do bazy danych Firebird",
+            Description = "Connection string do bazy danych",
             Required = true
         };
 
@@ -22,16 +29,18 @@ public static class UpdateDatabaseCommandEntry
             Required = true
         };
 
+        command.Options.Add(databaseTypeOption);
         command.Options.Add(connectionStringOption);
         command.Options.Add(scriptsDirOption);
 
         command.SetAction(async (ParseResult parseResult, CancellationToken cancellationToken) =>
         {
+            var databaseType = parseResult.GetValue(databaseTypeOption);
             var connectionString = parseResult.GetValue(connectionStringOption);
             var scriptsDir = parseResult.GetValue(scriptsDirOption);
             var handler = serviceProvider.GetRequiredService<IAsyncHandler<UpdateDatabaseCommand, UpdateDatabaseResponse>>();
             
-            await UpdateDatabaseAsync(connectionString!, scriptsDir!, handler, cancellationToken);
+            await UpdateDatabaseAsync(databaseType, connectionString!, scriptsDir!, handler, cancellationToken);
         });
 
         rootCommand.Subcommands.Add(command);
@@ -40,12 +49,14 @@ public static class UpdateDatabaseCommandEntry
     }
 
     private static async Task UpdateDatabaseAsync(
+        DatabaseType databaseType,
         string connectionString,
         string scriptsDir,
         IAsyncHandler<UpdateDatabaseCommand, UpdateDatabaseResponse> handler,
         CancellationToken cancellationToken = default)
     {
         var command = new UpdateDatabaseCommand(
+            DatabaseType: databaseType,
             ConnectionString: connectionString,
             ScriptsDirectory: scriptsDir);
 

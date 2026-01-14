@@ -1,10 +1,20 @@
 using FirebirdSql.Data.FirebirdClient;
 
-namespace DbMetaTool.Services.Firebird;
+namespace DbMetaTool.Databases.Firebird;
 
-public static class SqlErrorFormatter
+public static class FirebirdSqlErrorFormatter
 {
-    public static string FormatSqlError(FbException ex, string sql, int statementIndex)
+    public static string FormatSqlError(Exception ex, string sql, int statementIndex)
+    {
+        if (ex is not FbException fbEx)
+        {
+            return FormatGenericError(ex, sql, statementIndex);
+        }
+
+        return FormatFirebirdError(fbEx, sql, statementIndex);
+    }
+
+    private static string FormatFirebirdError(FbException ex, string sql, int statementIndex)
     {
         var sqlPreview = GetSqlPreview(sql, 200);
         var statementType = DetectStatementType(sql);
@@ -74,6 +84,48 @@ public static class SqlErrorFormatter
         sb.AppendLine();
         sb.AppendLine("Prawdopodobna przyczyna: Niezgodność sygnatur wywołań procedur.");
         sb.AppendLine("Sprawdź skrypty SQL i upewnij się, że wszystkie wywołania procedur mają poprawne sygnatury.");
+        
+        return sb.ToString();
+    }
+
+    private static string FormatGenericError(Exception ex, string sql, int statementIndex)
+    {
+        var sqlPreview = GetSqlPreview(sql, 200);
+        var statementType = DetectStatementType(sql);
+        
+        var sb = new System.Text.StringBuilder();
+        if (!string.IsNullOrEmpty(statementType))
+        {
+            sb.AppendLine($"Błąd wykonania {statementType} (statement #{statementIndex}):");
+        }
+        else
+        {
+            sb.AppendLine($"Błąd wykonania statement #{statementIndex}:");
+        }
+        sb.AppendLine();
+        
+        if (!string.IsNullOrWhiteSpace(ex.Message))
+        {
+            sb.AppendLine(ex.Message);
+        }
+        
+        if (ex.InnerException != null)
+        {
+            sb.AppendLine();
+            sb.AppendLine($"Szczegóły: {ex.InnerException.Message}");
+        }
+        
+        if (sql.Length <= 300)
+        {
+            sb.AppendLine();
+            sb.AppendLine("SQL:");
+            sb.AppendLine(sqlPreview);
+        }
+        else
+        {
+            sb.AppendLine();
+            sb.AppendLine($"SQL: {sqlPreview}... (pełny SQL ma {sql.Length} znaków)");
+        }
         
         return sb.ToString();
     }

@@ -1,20 +1,23 @@
-using DbMetaTool.Firebird;
+using DbMetaTool.Databases;
+using DbMetaTool.Databases.Firebird;
 using DbMetaTool.Models;
 using DbMetaTool.Models.results;
-using DbMetaTool.Services.Firebird;
 using DbMetaTool.Services.SqlScripts;
-using DbMetaTool.Services.Validation;
 using DbMetaTool.Utilities;
 
 namespace DbMetaTool.Services.Build;
 
 public class DatabaseBuildService(
-    IDatabaseCreator databaseCreator,
+    IDatabaseStrategyService strategyService,
     IScriptLoader scriptLoader) : IDatabaseBuildService
 {
-    public async Task<BuildResult> BuildDatabaseAsync(string databaseFilePath, string scriptsDirectory)
+    public async Task<BuildResult> BuildDatabaseAsync(
+        DatabaseType databaseType,
+        string databaseFilePath,
+        string scriptsDirectory)
     {
-        CreateEmptyDatabase(databaseFilePath);
+        var databaseCreator = strategyService.GetDatabaseCreator(databaseType);
+        CreateEmptyDatabase(databaseFilePath, databaseCreator);
 
         var scripts = scriptLoader.LoadScriptsInOrder(scriptsDirectory);
         
@@ -30,11 +33,7 @@ public class DatabaseBuildService(
 
         DisplayScriptsSummary(scripts);
 
-        var connectionString = FirebirdConnectionFactory.BuildConnectionString(databaseFilePath);
-        
-        var connectionFactory = new FirebirdConnectionFactory(connectionString);
-
-        using var sqlExecutor = new FirebirdSqlExecutor(connectionFactory);
+        using var sqlExecutor = strategyService.GetSqlExecutor(databaseType, databaseFilePath);
 
         await ExecuteScriptsAsync(sqlExecutor, scripts);
         
@@ -45,7 +44,7 @@ public class DatabaseBuildService(
             ProcedureScripts: scripts.Count(s => s.Type == ScriptType.Procedure));
     }
 
-    private void CreateEmptyDatabase(string databaseFilePath)
+    private static void CreateEmptyDatabase(string databaseFilePath, IDatabaseCreator databaseCreator)
     {
         databaseCreator.CreateDatabase(databaseFilePath);
         
@@ -84,7 +83,9 @@ public class DatabaseBuildService(
 
         if (allStatements.Count > 0)
         {
-            await sqlExecutor.ExecuteBatchAsync(allStatements, ProcedureBlrValidator.ValidateProcedureIntegrityAsync);
+            await sqlExecutor.ExecuteBatchAsync(
+                allStatements, 
+                FirebirdProcedureBlrValidator.ValidateProcedureIntegrityAsync);
         }
     }
 }

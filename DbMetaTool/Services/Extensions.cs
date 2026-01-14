@@ -1,8 +1,9 @@
 using System.CommandLine;
+using DbMetaTool.Databases;
+using DbMetaTool.Databases.Firebird;
 using DbMetaTool.Features.Commands;
 using DbMetaTool.Services.Build;
 using DbMetaTool.Services.Export;
-using DbMetaTool.Services.Firebird;
 using DbMetaTool.Services.Metadata;
 using DbMetaTool.Services.SqlScripts;
 using DbMetaTool.Services.Update;
@@ -22,8 +23,13 @@ public static class Extensions
 
     private static IServiceCollection RegisterServices(this IServiceCollection services)
     {
-        // Core services
+        // Database implementations
         services.AddSingleton<IDatabaseCreator, FirebirdDatabaseCreator>();
+
+        // Database strategy service
+        services.AddSingleton<IDatabaseStrategyService, DatabaseStrategyService>();
+
+        // Core services
         services.AddSingleton<IScriptLoader, ScriptLoader>();
         services.AddSingleton<IMetadataReader, FirebirdMetadataReader>();
 

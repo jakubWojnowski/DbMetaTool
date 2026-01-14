@@ -1,3 +1,9 @@
-﻿namespace DbMetaTool.Features.Commands.ExportMetadata;
+using DbMetaTool.Databases;
 
-public record ExportMetadataCommand(string ConnectionString, string OutputDirectory);
+namespace DbMetaTool.Features.Commands.ExportMetadata;
+
+public record ExportMetadataCommand(
+    DatabaseType DatabaseType,
+    string ConnectionString,
+    string OutputDirectory
+);

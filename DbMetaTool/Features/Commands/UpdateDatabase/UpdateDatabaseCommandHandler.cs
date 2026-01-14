@@ -1,5 +1,4 @@
-using DbMetaTool.Firebird;
-using DbMetaTool.Services.Firebird;
+using DbMetaTool.Databases;
 using DbMetaTool.Services.Metadata;
 using DbMetaTool.Services.SqlScripts;
 using DbMetaTool.Services.Update;
@@ -7,6 +6,7 @@ using DbMetaTool.Services.Update;
 namespace DbMetaTool.Features.Commands.UpdateDatabase;
 
 public class UpdateDatabaseCommandHandler(
+    IDatabaseStrategyService strategyService,
     IMetadataReader metadataReader,
     IScriptLoader scriptLoader,
     IUpdateReportGenerator reportGenerator) : IAsyncHandler<UpdateDatabaseCommand, UpdateDatabaseResponse>
@@ -17,15 +17,13 @@ public class UpdateDatabaseCommandHandler(
     {
         try
         {
-            Console.WriteLine("=== Aktualizacja bazy danych Firebird ===");
+            Console.WriteLine($"=== Aktualizacja bazy danych {request.DatabaseType} ===");
             Console.WriteLine();
             Console.WriteLine($"Connection String: {request.ConnectionString}");
             Console.WriteLine($"Katalog skryptów: {request.ScriptsDirectory}");
             Console.WriteLine();
 
-            var connectionFactory = new FirebirdConnectionFactory(request.ConnectionString);
-            
-            using var sqlExecutor = new FirebirdSqlExecutor(connectionFactory);
+            using var sqlExecutor = strategyService.GetSqlExecutor(request.DatabaseType, request.ConnectionString);
 
             var updateService = new DatabaseUpdateService(sqlExecutor, scriptLoader);
 

@@ -1,3 +1,9 @@
-﻿namespace DbMetaTool.Features.Commands.UpdateDatabase;
+using DbMetaTool.Databases;
 
-public record UpdateDatabaseCommand(string ConnectionString, string ScriptsDirectory);
+namespace DbMetaTool.Features.Commands.UpdateDatabase;
+
+public record UpdateDatabaseCommand(
+    DatabaseType DatabaseType,
+    string ConnectionString,
+    string ScriptsDirectory
+);

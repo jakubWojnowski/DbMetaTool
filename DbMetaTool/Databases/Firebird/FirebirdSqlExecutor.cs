@@ -1,19 +1,25 @@
-using DbMetaTool.Firebird;
+using DbMetaTool.Databases;
 using FirebirdSql.Data.FirebirdClient;
 
-namespace DbMetaTool.Services.Firebird;
+namespace DbMetaTool.Databases.Firebird;
+
 
 public class FirebirdSqlExecutor
 (
-    FirebirdConnectionFactory connectionFactory
-) : ISqlExecutor, IDisposable
+    string connectionString
+) : ISqlExecutor
 {
+    
+    public DatabaseType DatabaseType => DatabaseType.Firebird;
+
     private FbConnection? _connection;
     private FbTransaction? _readTransaction;
     private FbTransaction? _currentWriteTransaction;
     private bool _disposed;
 
-    public async Task ExecuteBatchAsync(List<string> sqlStatements, Func<ISqlExecutor, Task>? validationCallback = null)
+    public async Task ExecuteBatchAsync(
+        List<string> sqlStatements, 
+        Func<ISqlExecutor, Task>? validationCallback = null)
     {
         if (sqlStatements is null)
             throw new ArgumentNullException(nameof(sqlStatements));
@@ -25,7 +31,7 @@ public class FirebirdSqlExecutor
         
         if (_readTransaction != null)
         {
-            _readTransaction.Dispose();
+            await _readTransaction.DisposeAsync();
             
             _readTransaction = null;
         }
@@ -47,8 +53,8 @@ public class FirebirdSqlExecutor
             foreach (var sql in sqlStatements.Where(sql => !string.IsNullOrWhiteSpace(sql)))
             {
                 statementIndex++;
-                
-                using var command = _connection.CreateCommand();
+
+                await using var command = _connection.CreateCommand();
                 
                 command.Transaction = transaction;
                 
@@ -58,21 +64,11 @@ public class FirebirdSqlExecutor
                 {
                     await command.ExecuteNonQueryAsync();
                 }
-                catch (FbException fbEx)
-                {
-                    var errorDetails = SqlErrorFormatter.FormatSqlError(fbEx, sql, statementIndex);
-                    
-                    throw new InvalidOperationException(errorDetails, fbEx);
-                }
                 catch (Exception ex)
                 {
-                    var errorMessage = $"Błąd podczas wykonywania statement #{statementIndex}: {ex.Message}";
+                    var errorDetails = FirebirdSqlErrorFormatter.FormatSqlError(ex, sql, statementIndex);
                     
-                    if (ex.InnerException != null)
-                    {
-                        errorMessage += $"\nSzczegóły: {ex.InnerException.Message}";
-                    }
-                    throw new InvalidOperationException(errorMessage, ex);
+                    throw new InvalidOperationException(errorDetails, ex);
                 }
             }
             
@@ -126,7 +122,7 @@ public class FirebirdSqlExecutor
 
         var results = new List<T>();
 
-        using var command = _connection!.CreateCommand();
+        await using var command = _connection!.CreateCommand();
         
         command.Transaction = transactionToUse;
         
@@ -141,22 +137,11 @@ public class FirebirdSqlExecutor
                 results.Add(mapper(reader));
             }
         }
-        catch (FbException fbEx)
-        {
-            var errorDetails = SqlErrorFormatter.FormatSqlError(fbEx, sql, 0);
-            
-            throw new InvalidOperationException(errorDetails, fbEx);
-        }
         catch (Exception ex)
         {
-            var errorMessage = $"Błąd podczas wykonywania zapytania: {ex.Message}";
+            var errorDetails = FirebirdSqlErrorFormatter.FormatSqlError(ex, sql, 0);
             
-            if (ex.InnerException != null)
-            {
-                errorMessage += $"\nSzczegóły: {ex.InnerException.Message}";
-            }
-            
-            throw new InvalidOperationException(errorMessage, ex);
+            throw new InvalidOperationException(errorDetails, ex);
         }
 
         return results;
@@ -166,7 +151,9 @@ public class FirebirdSqlExecutor
     {
         if (_connection == null)
         {
-            _connection = await connectionFactory.CreateAndOpenConnectionAsync();
+            var connection = await FirebirdConnectionFactory.CreateAndOpenConnectionAsync(connectionString);
+            _connection = connection as FbConnection 
+                ?? throw new InvalidOperationException("Connection factory must return FbConnection for Firebird");
         }
         else if (_connection.State != System.Data.ConnectionState.Open)
         {

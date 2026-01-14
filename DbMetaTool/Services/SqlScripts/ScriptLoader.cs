@@ -23,7 +23,7 @@ public class ScriptLoader : IScriptLoader
         return scripts;
     }
 
-    private void LoadScriptsOfType(
+    private static void LoadScriptsOfType(
         List<ScriptFile> scripts, 
         string baseDirectory, 
         string subdirectory, 

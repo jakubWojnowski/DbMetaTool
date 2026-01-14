@@ -23,7 +23,10 @@ public class BuildDatabaseCommandHandler(
             Console.WriteLine($"Katalog skryptów: {request.ScriptsDirectory}");
             Console.WriteLine();
 
-            var result = await buildService.BuildDatabaseAsync(databaseFilePath, request.ScriptsDirectory);
+            var result = await buildService.BuildDatabaseAsync(
+                request.DatabaseType,
+                databaseFilePath,
+                request.ScriptsDirectory);
 
             reportGenerator.DisplayReport(result);
 
