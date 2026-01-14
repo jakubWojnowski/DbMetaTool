@@ -1,4 +1,5 @@
 using System.CommandLine;
+using DbMetaTool.Features.Commands;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DbMetaTool.Features.Commands.ExportMetadata;
@@ -28,8 +29,9 @@ public static class ExportMetadataCommandEntry
         {
             var connectionString = parseResult.GetValue(connectionStringOption);
             var outputDir = parseResult.GetValue(outputDirOption);
+            var handler = serviceProvider.GetRequiredService<IAsyncHandler<ExportMetadataCommand, ExportMetadataResponse>>();
             
-            await ExportMetadataAsync(connectionString!, outputDir!, serviceProvider, cancellationToken);
+            await ExportMetadataAsync(connectionString!, outputDir!, handler, cancellationToken);
         });
 
         rootCommand.Subcommands.Add(command);
@@ -40,11 +42,9 @@ public static class ExportMetadataCommandEntry
     private static async Task ExportMetadataAsync(
         string connectionString,
         string outputDir,
-        IServiceProvider serviceProvider,
+        IAsyncHandler<ExportMetadataCommand, ExportMetadataResponse> handler,
         CancellationToken cancellationToken = default)
     {
-        var handler = serviceProvider.GetRequiredService<IAsyncHandler<ExportMetadataCommand, ExportMetadataResponse>>();
-        
         var command = new ExportMetadataCommand(
             ConnectionString: connectionString,
             OutputDirectory: outputDir);

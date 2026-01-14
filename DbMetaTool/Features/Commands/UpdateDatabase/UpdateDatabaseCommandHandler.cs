@@ -11,7 +11,7 @@ public class UpdateDatabaseCommandHandler(
     IScriptLoader scriptLoader,
     IUpdateReportGenerator reportGenerator) : IAsyncHandler<UpdateDatabaseCommand, UpdateDatabaseResponse>
 {
-    public Task<UpdateDatabaseResponse> HandleAsync(
+    public async Task<UpdateDatabaseResponse> HandleAsync(
         UpdateDatabaseCommand request,
         CancellationToken cancellationToken = default)
     {
@@ -30,11 +30,11 @@ public class UpdateDatabaseCommandHandler(
             var updateService = new DatabaseUpdateService(sqlExecutor, scriptLoader);
 
             Console.WriteLine("Pobieranie aktualnego stanu bazy...");
-            var existingDomains = metadataReader.ReadDomains(sqlExecutor);
+            var existingDomains = await metadataReader.ReadDomainsAsync(sqlExecutor);
             
-            var existingTables = metadataReader.ReadTables(sqlExecutor);
+            var existingTables = await metadataReader.ReadTablesAsync(sqlExecutor);
             
-            var existingProcedures = metadataReader.ReadProcedures(sqlExecutor);
+            var existingProcedures = await metadataReader.ReadProceduresAsync(sqlExecutor);
 
             Console.WriteLine($"✓ Obecny stan: {existingDomains.Count} domen, {existingTables.Count} tabel, {existingProcedures.Count} procedur");
             Console.WriteLine();
@@ -44,7 +44,7 @@ public class UpdateDatabaseCommandHandler(
             Console.WriteLine($"Wczytano {scripts.Count} skryptów");
             Console.WriteLine();
 
-            updateService.ProcessUpdate(
+            await updateService.ProcessUpdate(
                 scripts, 
                 existingDomains, 
                 existingTables,
@@ -54,12 +54,12 @@ public class UpdateDatabaseCommandHandler(
 
             Console.WriteLine("Baza danych została zaktualizowana pomyślnie.");
 
-            return Task.FromResult(new UpdateDatabaseResponse(Success: true));
+            return new UpdateDatabaseResponse(Success: true);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Błąd: {ex.Message}");
-            return Task.FromResult(new UpdateDatabaseResponse(Success: false, ErrorMessage: ex.Message));
+            return new UpdateDatabaseResponse(Success: false, ErrorMessage: ex.Message);
         }
     }
 }

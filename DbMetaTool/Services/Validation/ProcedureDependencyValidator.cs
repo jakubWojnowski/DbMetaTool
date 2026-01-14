@@ -5,7 +5,7 @@ namespace DbMetaTool.Services.Validation;
 
 public static class ProcedureDependencyValidator
 {
-    public static List<string> GetCallingProcedures(ISqlExecutor executor, string procedureName)
+    public static Task<List<string>> GetCallingProceduresAsync(ISqlExecutor executor, string procedureName)
     {
         var sql = new StringBuilder();
         
@@ -16,7 +16,7 @@ public static class ProcedureDependencyValidator
         sql.AppendLine("  AND RDB$DEPENDENT_TYPE = 5");
         sql.AppendLine("ORDER BY RDB$DEPENDENT_NAME");
 
-        return executor.ExecuteRead(sql.ToString(), reader => 
+        return executor.ExecuteReadAsync(sql.ToString(), reader => 
             reader["RDB$DEPENDENT_NAME"].ToString()!.Trim());
     }
 }

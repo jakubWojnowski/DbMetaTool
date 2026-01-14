@@ -13,7 +13,7 @@ public class FirebirdSqlExecutor
     private FbTransaction? _currentWriteTransaction;
     private bool _disposed;
 
-    public void ExecuteBatch(List<string> sqlStatements, Action<ISqlExecutor>? validationCallback = null)
+    public async Task ExecuteBatchAsync(List<string> sqlStatements, Func<ISqlExecutor, Task>? validationCallback = null)
     {
         if (sqlStatements is null)
             throw new ArgumentNullException(nameof(sqlStatements));
@@ -21,7 +21,7 @@ public class FirebirdSqlExecutor
         if (sqlStatements.Count == 0)
             return;
 
-        EnsureConnection();
+        await EnsureConnectionAsync();
         
         if (_readTransaction != null)
         {
@@ -37,7 +37,7 @@ public class FirebirdSqlExecutor
             WaitTimeout = TimeSpan.FromSeconds(10)
         };
 
-        using var transaction = _connection!.BeginTransaction(options);
+        var transaction = await _connection!.BeginTransactionAsync(options);
 
         try
         {
@@ -56,7 +56,7 @@ public class FirebirdSqlExecutor
                 
                 try
                 {
-                    command.ExecuteNonQuery();
+                    await command.ExecuteNonQueryAsync();
                 }
                 catch (FbException fbEx)
                 {
@@ -76,22 +76,26 @@ public class FirebirdSqlExecutor
                 }
             }
             
-            validationCallback?.Invoke(this);
+            if (validationCallback != null)
+            {
+                await validationCallback(this);
+            }
             
-            transaction.Commit();
+            await transaction.CommitAsync();
         }
         catch
         {
-            transaction.Rollback();
+            await transaction.RollbackAsync();
             throw;
         }
         finally
         {
             _currentWriteTransaction = null;
+            await transaction.DisposeAsync();
         }
     }
 
-    public List<T> ExecuteRead<T>(string sql, Func<System.Data.IDataReader, T> mapper)
+    public async Task<List<T>> ExecuteReadAsync<T>(string sql, Func<System.Data.IDataReader, T> mapper)
     {
         if (string.IsNullOrWhiteSpace(sql))
             throw new ArgumentException("SQL cannot be empty", nameof(sql));
@@ -99,7 +103,7 @@ public class FirebirdSqlExecutor
         if (mapper == null)
             throw new ArgumentNullException(nameof(mapper));
 
-        EnsureConnection();
+        await EnsureConnectionAsync();
         
         var transactionToUse = _currentWriteTransaction;
 
@@ -114,7 +118,7 @@ public class FirebirdSqlExecutor
                                           FbTransactionBehavior.Read
                 };
 
-                _readTransaction = _connection!.BeginTransaction(options);
+                _readTransaction = await _connection!.BeginTransactionAsync(options);
             }
 
             transactionToUse = _readTransaction;
@@ -130,9 +134,9 @@ public class FirebirdSqlExecutor
 
         try
         {
-            using var reader = command.ExecuteReader();
+            await using var reader = await command.ExecuteReaderAsync();
             
-            while (reader.Read())
+            while (await reader.ReadAsync())
             {
                 results.Add(mapper(reader));
             }
@@ -158,15 +162,15 @@ public class FirebirdSqlExecutor
         return results;
     }
 
-    private void EnsureConnection()
+    private async Task EnsureConnectionAsync()
     {
         if (_connection == null)
         {
-            _connection = connectionFactory.CreateAndOpenConnection();
+            _connection = await connectionFactory.CreateAndOpenConnectionAsync();
         }
         else if (_connection.State != System.Data.ConnectionState.Open)
         {
-            _connection.Open();
+            await _connection.OpenAsync();
         }
     }
 

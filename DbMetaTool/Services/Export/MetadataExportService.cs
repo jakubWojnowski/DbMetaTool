@@ -8,12 +8,14 @@ namespace DbMetaTool.Services.Export;
 public class MetadataExportService(
     IMetadataReader metadataReader) : IMetadataExportService
 {
-    public ExportResult ExportAll(ISqlExecutor executor, string outputDirectory)
+    public async Task<ExportResult> ExportAll(ISqlExecutor executor, string outputDirectory,
+        CancellationToken cancellationToken = default)
     {
         if (executor == null)
         {
             throw new ArgumentNullException(nameof(executor));
         }
+
         if (outputDirectory == null)
         {
             throw new ArgumentNullException(nameof(outputDirectory));
@@ -22,21 +24,21 @@ public class MetadataExportService(
         PrepareOutputDirectory(outputDirectory);
 
         Console.WriteLine("Pobieranie metadanych (spójny snapshot)...");
-        
-        var domains = ReadDomains(executor);
-        
-        var tables = ReadTables(executor);
-        
-        var procedures = ReadProcedures(executor);
+
+        var domains = await ReadDomainsAsync(executor);
+
+        var tables = await ReadTablesAsync(executor);
+
+        var procedures = await ReadProceduresAsync(executor);
 
         Console.WriteLine();
         Console.WriteLine("Generowanie skryptów SQL...");
 
-        ExportDomains(outputDirectory, domains);
-        
-        ExportTables(outputDirectory, tables);
-        
-        ExportProcedures(outputDirectory, procedures);
+        await ExportDomains(outputDirectory, domains, cancellationToken);
+
+        await ExportTables(outputDirectory, tables, cancellationToken);
+
+        await ExportProcedures(outputDirectory, procedures, cancellationToken);
 
         return new ExportResult(
             OutputDirectory: Path.GetFullPath(outputDirectory),
@@ -55,88 +57,88 @@ public class MetadataExportService(
         }
 
         var domainsDir = Path.Combine(absolutePath, "domains");
-        
+
         var tablesDir = Path.Combine(absolutePath, "tables");
-        
+
         var proceduresDir = Path.Combine(absolutePath, "procedures");
 
         Directory.CreateDirectory(domainsDir);
-        
+
         Directory.CreateDirectory(tablesDir);
-        
+
         Directory.CreateDirectory(proceduresDir);
     }
 
-    private List<DomainMetadata> ReadDomains(ISqlExecutor executor)
+    private async Task<List<DomainMetadata>> ReadDomainsAsync(ISqlExecutor executor)
     {
-        var domains = metadataReader.ReadDomains(executor);
-        
+        var domains = await metadataReader.ReadDomainsAsync(executor);
+
         Console.WriteLine($"✓ Znaleziono {domains.Count} domen");
-        
+
         return domains;
     }
 
-    private List<TableMetadata> ReadTables(ISqlExecutor executor)
+    private async Task<List<TableMetadata>> ReadTablesAsync(ISqlExecutor executor)
     {
-        var tables = metadataReader.ReadTables(executor);
-        
+        var tables = await metadataReader.ReadTablesAsync(executor);
+
         Console.WriteLine($"✓ Znaleziono {tables.Count} tabel");
-        
+
         return tables;
     }
 
-    private List<ProcedureMetadata> ReadProcedures(ISqlExecutor executor)
+    private async Task<List<ProcedureMetadata>> ReadProceduresAsync(ISqlExecutor executor)
     {
-        var procedures = metadataReader.ReadProcedures(executor);
-        
+        var procedures = await metadataReader.ReadProceduresAsync(executor);
+
         Console.WriteLine($"✓ Znaleziono {procedures.Count} procedur");
-        
+
         return procedures;
     }
 
-    private static void ExportDomains(string outputDirectory, List<DomainMetadata> domains)
+    private static async Task ExportDomains(string outputDirectory, List<DomainMetadata> domains, CancellationToken cancellationToken)
     {
         var domainsDir = Path.Combine(Path.GetFullPath(outputDirectory), "domains");
 
         foreach (var domain in domains)
         {
             var script = SqlScriptGenerator.GenerateDomainScript(domain);
-            
+
             var fileName = Path.Combine(domainsDir, $"{domain.Name}.sql");
-            
-            File.WriteAllText(fileName, script);
+
+            await File.WriteAllTextAsync(fileName, script, cancellationToken);
         }
 
         Console.WriteLine($"✓ Zapisano {domains.Count} skryptów domen");
     }
 
-    private static void ExportTables(string outputDirectory, List<TableMetadata> tables)
+    private static async Task ExportTables(string outputDirectory, List<TableMetadata> tables, CancellationToken cancellationToken)
     {
         var tablesDir = Path.Combine(Path.GetFullPath(outputDirectory), "tables");
 
         foreach (var table in tables)
         {
             var script = SqlScriptGenerator.GenerateTableScript(table);
-            
+
             var fileName = Path.Combine(tablesDir, $"{table.Name}.sql");
-            
-            File.WriteAllText(fileName, script);
+
+            await File.WriteAllTextAsync(fileName, script, cancellationToken);
         }
 
         Console.WriteLine($"✓ Zapisano {tables.Count} skryptów tabel");
     }
 
-    private static void ExportProcedures(string outputDirectory, List<ProcedureMetadata> procedures)
+    private static async Task ExportProcedures(string outputDirectory, List<ProcedureMetadata> procedures, CancellationToken cancellationToken)
     {
         var proceduresDir = Path.Combine(Path.GetFullPath(outputDirectory), "procedures");
 
         foreach (var procedure in procedures)
         {
             var script = SqlScriptGenerator.GenerateProcedureScript(procedure);
-            
+
             var fileName = Path.Combine(proceduresDir, $"{procedure.Name}.sql");
-            
-            File.WriteAllText(fileName, script);
+
+            await File.WriteAllTextAsync(fileName, script, cancellationToken);
         }
 
         Console.WriteLine($"✓ Zapisano {procedures.Count} skryptów procedur");

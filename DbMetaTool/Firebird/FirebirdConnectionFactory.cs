@@ -40,5 +40,14 @@ public class FirebirdConnectionFactory
         
         return connection;
     }
+
+    public async Task<FbConnection> CreateAndOpenConnectionAsync()
+    {
+        var connection = new FbConnection(_connectionString);
+        
+        await connection.OpenAsync();
+        
+        return connection;
+    }
 }
 

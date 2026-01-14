@@ -5,7 +5,7 @@ using DbMetaTool.Features.Commands.UpdateDatabase;
 
 namespace DbMetaTool.Features.Commands;
 
-public static class ApplicationCommands
+public static class Extensions
 {
     public static RootCommand MapApplicationCommands(this RootCommand rootCommand, IServiceProvider serviceProvider)
     {

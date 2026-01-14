@@ -8,7 +8,7 @@ public class FirebirdMetadataReader : IMetadataReader
 {
     private const string SystemPrefixRdb = "RDB$";
 
-    public List<DomainMetadata> ReadDomains(ISqlExecutor executor)
+    public async Task<List<DomainMetadata>> ReadDomainsAsync(ISqlExecutor executor)
     {
         var sql = new StringBuilder();
         sql.AppendLine("SELECT");
@@ -28,7 +28,7 @@ public class FirebirdMetadataReader : IMetadataReader
         sql.AppendLine("  AND RDB$FIELD_NAME NOT STARTING WITH 'SEC$'");
         sql.AppendLine("ORDER BY RDB$FIELD_NAME");
 
-        return executor.ExecuteRead(sql.ToString(), reader =>
+        return await executor.ExecuteReadAsync(sql.ToString(), reader =>
         {
             var fieldType = (FirebirdFieldType)Convert.ToInt32(reader["FIELD_TYPE"]);
             
@@ -74,7 +74,7 @@ public class FirebirdMetadataReader : IMetadataReader
         });
     }
 
-    public List<TableMetadata> ReadTables(ISqlExecutor executor)
+    public async Task<List<TableMetadata>> ReadTablesAsync(ISqlExecutor executor)
     {
         var sql = new StringBuilder();
         
@@ -87,13 +87,13 @@ public class FirebirdMetadataReader : IMetadataReader
         sql.AppendLine("  AND RDB$RELATION_NAME NOT STARTING WITH 'SEC$'");
         sql.AppendLine("ORDER BY RDB$RELATION_NAME");
 
-        var tables = executor.ExecuteRead(sql.ToString(), reader => reader["TABLE_NAME"].ToString()!.Trim());
+        var tables = await executor.ExecuteReadAsync(sql.ToString(), reader => reader["TABLE_NAME"].ToString()!.Trim());
 
         var result = new List<TableMetadata>();
 
         foreach (var tableName in tables)
         {
-            var columns = ReadTableColumns(executor, tableName);
+            var columns = await ReadTableColumnsAsync(executor, tableName);
             result.Add(new TableMetadata(
                 Name: tableName,
                 Columns: columns
@@ -103,7 +103,7 @@ public class FirebirdMetadataReader : IMetadataReader
         return result;
     }
 
-    private List<ColumnMetadata> ReadTableColumns(ISqlExecutor executor, string tableName)
+    private async Task<List<ColumnMetadata>> ReadTableColumnsAsync(ISqlExecutor executor, string tableName)
     {
         var sql = new StringBuilder();
         
@@ -124,7 +124,7 @@ public class FirebirdMetadataReader : IMetadataReader
         sql.AppendLine($"WHERE rf.RDB$RELATION_NAME = '{tableName}'");
         sql.AppendLine("ORDER BY rf.RDB$FIELD_POSITION");
 
-        return executor.ExecuteRead(sql.ToString(), reader =>
+        return await executor.ExecuteReadAsync(sql.ToString(), reader =>
         {
             var fieldSource = reader["FIELD_SOURCE"].ToString()!.Trim();
             
@@ -185,7 +185,7 @@ public class FirebirdMetadataReader : IMetadataReader
         });
     }
 
-    public List<ProcedureMetadata> ReadProcedures(ISqlExecutor executor)
+    public async Task<List<ProcedureMetadata>> ReadProceduresAsync(ISqlExecutor executor)
     {
         var sql = new StringBuilder();
         
@@ -198,31 +198,40 @@ public class FirebirdMetadataReader : IMetadataReader
         sql.AppendLine("  AND RDB$PROCEDURE_NAME NOT STARTING WITH 'SEC$'");
         sql.AppendLine("ORDER BY RDB$PROCEDURE_NAME");
 
-        return executor.ExecuteRead(sql.ToString(), reader =>
+        var procedureRows = await executor.ExecuteReadAsync(sql.ToString(), reader =>
         {
             var procedureName = reader["PROCEDURE_NAME"].ToString()!.Trim();
             var source = reader["PROCEDURE_SOURCE"] == DBNull.Value
                 ? null
                 : reader["PROCEDURE_SOURCE"].ToString();
 
-            var fullSource = BuildFullProcedureDefinition(executor, procedureName, source);
-
-            return new ProcedureMetadata(
-                Name: procedureName,
-                Source: fullSource);
+            return (ProcedureName: procedureName, Source: source);
         });
+
+        var procedures = new List<ProcedureMetadata>();
+
+        foreach (var row in procedureRows)
+        {
+            var fullSource = await BuildFullProcedureDefinitionAsync(executor, row.ProcedureName, row.Source);
+
+            procedures.Add(new ProcedureMetadata(
+                Name: row.ProcedureName,
+                Source: fullSource));
+        }
+
+        return procedures;
     }
 
-    private string? BuildFullProcedureDefinition(ISqlExecutor executor, string procedureName, string? body)
+    private async Task<string?> BuildFullProcedureDefinitionAsync(ISqlExecutor executor, string procedureName, string? body)
     {
         if (string.IsNullOrWhiteSpace(body))
         {
             return null;
         }
 
-        var inputParams = ReadProcedureParameters(executor, procedureName, isInput: true);
+        var inputParams = await ReadProcedureParametersAsync(executor, procedureName, isInput: true);
         
-        var outputParams = ReadProcedureParameters(executor, procedureName, isInput: false);
+        var outputParams = await ReadProcedureParametersAsync(executor, procedureName, isInput: false);
 
         var sb = new StringBuilder();
         sb.AppendLine($"CREATE PROCEDURE {procedureName}");
@@ -258,7 +267,7 @@ public class FirebirdMetadataReader : IMetadataReader
         return sb.ToString();
     }
 
-    private List<(string Name, string DataType)> ReadProcedureParameters(
+    private async Task<List<(string Name, string DataType)>> ReadProcedureParametersAsync(
         ISqlExecutor executor,
         string procedureName,
         bool isInput)
@@ -280,7 +289,7 @@ public class FirebirdMetadataReader : IMetadataReader
         sql.AppendLine($"  AND pp.RDB$PARAMETER_TYPE = {(isInput ? 0 : 1)}");
         sql.AppendLine("ORDER BY pp.RDB$PARAMETER_NUMBER");
 
-        return executor.ExecuteRead(sql.ToString(), reader =>
+        return await executor.ExecuteReadAsync(sql.ToString(), reader =>
         {
             var fieldType = (FirebirdFieldType)Convert.ToInt32(reader["FIELD_TYPE"]);
             var fieldSubType = reader["FIELD_SUBTYPE"] == DBNull.Value

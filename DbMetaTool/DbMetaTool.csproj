@@ -9,7 +9,6 @@
 
     <ItemGroup>
       <PackageReference Include="FirebirdSql.Data.FirebirdClient" Version="10.3.4" />
-      <PackageReference Include="Microsoft.Extensions.Configuration.CommandLine" Version="10.0.2" />
       <PackageReference Include="Microsoft.Extensions.Hosting" Version="10.0.2" />
       <PackageReference Include="System.CommandLine" Version="2.0.2" />
     </ItemGroup>

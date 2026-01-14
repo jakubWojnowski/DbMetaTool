@@ -4,5 +4,5 @@ namespace DbMetaTool.Services.Build;
 
 public interface IDatabaseBuildService
 {
-    BuildResult BuildDatabase(string databaseFilePath, string scriptsDirectory);
+    Task<BuildResult> BuildDatabaseAsync(string databaseFilePath, string scriptsDirectory);
 }

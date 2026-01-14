@@ -1,4 +1,5 @@
 using System.CommandLine;
+using DbMetaTool.Features.Commands;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DbMetaTool.Features.Commands.UpdateDatabase;
@@ -28,8 +29,9 @@ public static class UpdateDatabaseCommandEntry
         {
             var connectionString = parseResult.GetValue(connectionStringOption);
             var scriptsDir = parseResult.GetValue(scriptsDirOption);
+            var handler = serviceProvider.GetRequiredService<IAsyncHandler<UpdateDatabaseCommand, UpdateDatabaseResponse>>();
             
-            await UpdateDatabaseAsync(connectionString!, scriptsDir!, serviceProvider, cancellationToken);
+            await UpdateDatabaseAsync(connectionString!, scriptsDir!, handler, cancellationToken);
         });
 
         rootCommand.Subcommands.Add(command);
@@ -40,11 +42,9 @@ public static class UpdateDatabaseCommandEntry
     private static async Task UpdateDatabaseAsync(
         string connectionString,
         string scriptsDir,
-        IServiceProvider serviceProvider,
+        IAsyncHandler<UpdateDatabaseCommand, UpdateDatabaseResponse> handler,
         CancellationToken cancellationToken = default)
     {
-        var handler = serviceProvider.GetRequiredService<IAsyncHandler<UpdateDatabaseCommand, UpdateDatabaseResponse>>();
-        
         var command = new UpdateDatabaseCommand(
             ConnectionString: connectionString,
             ScriptsDirectory: scriptsDir);

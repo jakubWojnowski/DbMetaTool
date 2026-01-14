@@ -5,9 +5,9 @@ namespace DbMetaTool.Services.Metadata;
 
 public interface IMetadataReader
 {
-    List<DomainMetadata> ReadDomains(ISqlExecutor executor);
+    Task<List<DomainMetadata>> ReadDomainsAsync(ISqlExecutor executor);
     
-    List<TableMetadata> ReadTables(ISqlExecutor executor);
+    Task<List<TableMetadata>> ReadTablesAsync(ISqlExecutor executor);
     
-    List<ProcedureMetadata> ReadProcedures(ISqlExecutor executor);
+    Task<List<ProcedureMetadata>> ReadProceduresAsync(ISqlExecutor executor);
 }

@@ -5,5 +5,5 @@ namespace DbMetaTool.Services.Export;
 
 public interface IMetadataExportService
 {
-    ExportResult ExportAll(ISqlExecutor executor, string outputDirectory);
+    Task<ExportResult> ExportAll(ISqlExecutor executor, string outputDirectory, CancellationToken cancellationToken = default);
 }

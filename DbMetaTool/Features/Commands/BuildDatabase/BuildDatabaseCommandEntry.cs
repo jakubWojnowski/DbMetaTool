@@ -1,4 +1,5 @@
 using System.CommandLine;
+using DbMetaTool.Features.Commands;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DbMetaTool.Features.Commands.BuildDatabase;
@@ -28,8 +29,9 @@ public static class BuildDatabaseCommandEntry
         {
             var dbDir = parseResult.GetValue(dbDirOption);
             var scriptsDir = parseResult.GetValue(scriptsDirOption);
+            var handler = serviceProvider.GetRequiredService<IAsyncHandler<BuildDatabaseCommand, BuildDatabaseResponse>>();
             
-            await BuildDatabaseAsync(dbDir!, scriptsDir!, serviceProvider, cancellationToken);
+            await BuildDatabaseAsync(dbDir!, scriptsDir!, handler, cancellationToken);
         });
 
         rootCommand.Subcommands.Add(command);
@@ -40,11 +42,9 @@ public static class BuildDatabaseCommandEntry
     private static async Task BuildDatabaseAsync(
         string dbDir,
         string scriptsDir,
-        IServiceProvider serviceProvider,
+        IAsyncHandler<BuildDatabaseCommand, BuildDatabaseResponse> handler,
         CancellationToken cancellationToken = default)
     {
-        var handler = serviceProvider.GetRequiredService<IAsyncHandler<BuildDatabaseCommand, BuildDatabaseResponse>>();
-        
         var command = new BuildDatabaseCommand(
             DatabasePath: dbDir,
             ScriptsDirectory: scriptsDir);

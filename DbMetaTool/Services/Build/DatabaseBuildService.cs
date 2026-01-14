@@ -12,7 +12,7 @@ public class DatabaseBuildService(
     IDatabaseCreator databaseCreator,
     IScriptLoader scriptLoader) : IDatabaseBuildService
 {
-    public BuildResult BuildDatabase(string databaseFilePath, string scriptsDirectory)
+    public async Task<BuildResult> BuildDatabaseAsync(string databaseFilePath, string scriptsDirectory)
     {
         CreateEmptyDatabase(databaseFilePath);
 
@@ -36,7 +36,7 @@ public class DatabaseBuildService(
 
         using var sqlExecutor = new FirebirdSqlExecutor(connectionFactory);
 
-        ExecuteScripts(sqlExecutor, scripts);
+        await ExecuteScriptsAsync(sqlExecutor, scripts);
         
         return new BuildResult(
             ExecutedCount: scripts.Count,
@@ -61,7 +61,7 @@ public class DatabaseBuildService(
         Console.WriteLine();
     }
 
-    private void ExecuteScripts(
+    private async Task ExecuteScriptsAsync(
         ISqlExecutor sqlExecutor,
         List<ScriptFile> scripts)
     {
@@ -84,7 +84,7 @@ public class DatabaseBuildService(
 
         if (allStatements.Count > 0)
         {
-            sqlExecutor.ExecuteBatch(allStatements, ProcedureBlrValidator.ValidateProcedureIntegrity);
+            await sqlExecutor.ExecuteBatchAsync(allStatements, ProcedureBlrValidator.ValidateProcedureIntegrityAsync);
         }
     }
 }

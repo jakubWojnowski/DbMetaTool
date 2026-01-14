@@ -7,7 +7,7 @@ public class BuildDatabaseCommandHandler(
     IDatabaseBuildService buildService,
     IBuildReportGenerator reportGenerator) : IAsyncHandler<BuildDatabaseCommand, BuildDatabaseResponse>
 {
-    public Task<BuildDatabaseResponse> HandleAsync(
+    public async Task<BuildDatabaseResponse> HandleAsync(
         BuildDatabaseCommand request,
         CancellationToken cancellationToken = default)
     {
@@ -23,18 +23,18 @@ public class BuildDatabaseCommandHandler(
             Console.WriteLine($"Katalog skryptów: {request.ScriptsDirectory}");
             Console.WriteLine();
 
-            var result = buildService.BuildDatabase(databaseFilePath, request.ScriptsDirectory);
+            var result = await buildService.BuildDatabaseAsync(databaseFilePath, request.ScriptsDirectory);
 
             reportGenerator.DisplayReport(result);
 
             Console.WriteLine("Baza danych została zbudowana pomyślnie.");
 
-            return Task.FromResult(new BuildDatabaseResponse(Success: true));
+            return new BuildDatabaseResponse(Success: true);
         }
         catch (Exception ex)
         {
             Console.WriteLine($"Błąd: {ex.Message}");
-            return Task.FromResult(new BuildDatabaseResponse(Success: false, ErrorMessage: ex.Message));
+            return new BuildDatabaseResponse(Success: false, ErrorMessage: ex.Message);
         }
     }
 }

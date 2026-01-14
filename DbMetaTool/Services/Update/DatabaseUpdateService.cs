@@ -16,7 +16,7 @@ public class DatabaseUpdateService(
 
     public List<DatabaseChange> GetChanges() => _changes;
 
-    public void ProcessUpdate(
+    public async Task ProcessUpdate(
         List<ScriptFile> scripts,
         List<DomainMetadata> existingDomains,
         List<TableMetadata> existingTables,
@@ -28,11 +28,11 @@ public class DatabaseUpdateService(
         
         ProcessTables(scripts, existingTables);
         
-        ProcessProcedures(scripts, existingProcedures);
+        await ProcessProceduresAsync(scripts, existingProcedures);
         
         if (_allStatements.Count > 0)
         {
-            mainExecutor.ExecuteBatch(_allStatements, ProcedureBlrValidator.ValidateProcedureIntegrity);
+            await mainExecutor.ExecuteBatchAsync(_allStatements, ProcedureBlrValidator.ValidateProcedureIntegrityAsync);
         }
     }
 
@@ -102,7 +102,7 @@ public class DatabaseUpdateService(
         Console.WriteLine();
     }
 
-    private void ProcessProcedures(
+    private async Task ProcessProceduresAsync(
         List<ScriptFile> scripts,
         List<ProcedureMetadata> existingProcedures)
     {
@@ -127,7 +127,7 @@ public class DatabaseUpdateService(
                 }
             }
             
-            CollectProcedureStatements(script, procedureName);
+            await CollectProcedureStatements(script, procedureName);
         }
 
         Console.WriteLine();
@@ -222,11 +222,11 @@ public class DatabaseUpdateService(
         Console.WriteLine("✓");
     }
 
-    private void CollectProcedureStatements(ScriptFile script, string procedureName)
+    private async Task CollectProcedureStatements(ScriptFile script, string procedureName)
     {
         Console.Write($"  Procedura {procedureName}... ");
         
-        var callingProcedures = ProcedureDependencyValidator.GetCallingProcedures(mainExecutor, procedureName);
+        var callingProcedures = await ProcedureDependencyValidator.GetCallingProceduresAsync(mainExecutor, procedureName);
         
         if (callingProcedures.Count > 0)
         {
