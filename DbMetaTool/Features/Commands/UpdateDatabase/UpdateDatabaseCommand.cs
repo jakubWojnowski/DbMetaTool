@@ -1,3 +1,3 @@
-﻿namespace DbMetaTool.Commands.UpdateDatabase;
+﻿namespace DbMetaTool.Features.Commands.UpdateDatabase;
 
 public record UpdateDatabaseCommand(string ConnectionString, string ScriptsDirectory);

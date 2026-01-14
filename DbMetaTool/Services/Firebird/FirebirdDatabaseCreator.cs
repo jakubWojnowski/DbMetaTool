@@ -3,9 +3,9 @@ using FirebirdSql.Data.FirebirdClient;
 
 namespace DbMetaTool.Services.Firebird;
 
-public static class FirebirdDatabaseCreator
+public class FirebirdDatabaseCreator : IDatabaseCreator
 {
-    public static void CreateDatabase(string databasePath)
+    public void CreateDatabase(string databasePath)
     {
         if (string.IsNullOrWhiteSpace(databasePath))
         {
@@ -34,7 +34,7 @@ public static class FirebirdDatabaseCreator
         FbConnection.CreateDatabase(connectionString, overwrite: false);
     }
 
-    private static bool DatabaseExists(string connectionString)
+    private bool DatabaseExists(string connectionString)
     {
         try
         {

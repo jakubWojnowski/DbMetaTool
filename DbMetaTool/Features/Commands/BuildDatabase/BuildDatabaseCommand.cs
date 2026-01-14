@@ -1,4 +1,4 @@
-namespace DbMetaTool.Commands.BuildDatabase;
+namespace DbMetaTool.Features.Commands.BuildDatabase;
 
 public record BuildDatabaseCommand(
     string DatabasePath,

@@ -6,7 +6,9 @@ using DbMetaTool.Utilities;
 
 namespace DbMetaTool.Services.Update;
 
-public class DatabaseUpdateService(ISqlExecutor mainExecutor)
+public class DatabaseUpdateService(
+    ISqlExecutor mainExecutor,
+    IScriptLoader scriptLoader)
 {
     private readonly List<DatabaseChange> _changes = [];
     private List<DomainMetadata> _existingDomains = [];
@@ -83,7 +85,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
             }
             else
             {
-                var sql = ScriptLoader.ReadScriptContent(script);
+                var sql = scriptLoader.ReadScriptContent(script);
                 if (HasCreateStatement(sql))
                 {
                     Console.WriteLine($"  Tabela {tableName} już istnieje - pomijam skrypt CREATE");
@@ -117,7 +119,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
 
             if (existingProcedure != null)
             {
-                var sql = ScriptLoader.ReadScriptContent(script);
+                var sql = scriptLoader.ReadScriptContent(script);
                 if (HasCreateStatement(sql))
                 {
                     Console.WriteLine($"  Procedura {procedureName} już istnieje - pomijam skrypt CREATE");
@@ -135,7 +137,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
     {
         Console.Write($"  Tworzenie domeny {domainName}... ");
         
-        var sql = ScriptLoader.ReadScriptContent(script);
+        var sql = scriptLoader.ReadScriptContent(script);
         
         var statements = SqlScriptParser.ParseScript(sql)
             .Where(s => !string.IsNullOrWhiteSpace(s))
@@ -154,7 +156,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
     {
         Console.Write($"  Tworzenie tabeli {tableName}... ");
         
-        var sql = ScriptLoader.ReadScriptContent(script);
+        var sql = scriptLoader.ReadScriptContent(script);
         
         var statements = SqlScriptParser.ParseScript(sql)
             .Where(s => !string.IsNullOrWhiteSpace(s))
@@ -172,7 +174,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
 
     private void ProcessTableColumns(ScriptFile script, TableMetadata existingTable)
     {
-        var sql = ScriptLoader.ReadScriptContent(script);
+        var sql = scriptLoader.ReadScriptContent(script);
         
         var desiredTable = ScriptDefinitionParser.ParseTableFromScript(sql, existingTable.Name);
 
@@ -232,7 +234,7 @@ public class DatabaseUpdateService(ISqlExecutor mainExecutor)
             Console.WriteLine($"    ⚠ Procedura jest wywoływana przez: {string.Join(", ", callingProcedures)}");
         }
         
-        var sql = ScriptLoader.ReadScriptContent(script);
+        var sql = scriptLoader.ReadScriptContent(script);
         var statements = SqlScriptParser.ParseScript(sql)
             .Where(s => !string.IsNullOrWhiteSpace(s))
             .ToList();

@@ -2,9 +2,9 @@ using DbMetaTool.Models.results;
 
 namespace DbMetaTool.Services.Export;
 
-public static class ExportReportGenerator
+public class ExportReportGenerator : IExportReportGenerator
 {
-    public static void DisplayReport(ExportResult result)
+    public void DisplayReport(ExportResult result)
     {
         Console.WriteLine();
         Console.WriteLine("=== Podsumowanie ===");

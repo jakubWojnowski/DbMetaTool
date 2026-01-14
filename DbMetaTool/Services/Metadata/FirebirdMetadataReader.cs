@@ -4,11 +4,11 @@ using DbMetaTool.Services.Firebird;
 
 namespace DbMetaTool.Services.Metadata;
 
-public static class FirebirdMetadataReader
+public class FirebirdMetadataReader : IMetadataReader
 {
     private const string SystemPrefixRdb = "RDB$";
 
-    public static List<DomainMetadata> ReadDomains(ISqlExecutor executor)
+    public List<DomainMetadata> ReadDomains(ISqlExecutor executor)
     {
         var sql = new StringBuilder();
         sql.AppendLine("SELECT");
@@ -74,7 +74,7 @@ public static class FirebirdMetadataReader
         });
     }
 
-    public static List<TableMetadata> ReadTables(ISqlExecutor executor)
+    public List<TableMetadata> ReadTables(ISqlExecutor executor)
     {
         var sql = new StringBuilder();
         
@@ -103,7 +103,7 @@ public static class FirebirdMetadataReader
         return result;
     }
 
-    private static List<ColumnMetadata> ReadTableColumns(ISqlExecutor executor, string tableName)
+    private List<ColumnMetadata> ReadTableColumns(ISqlExecutor executor, string tableName)
     {
         var sql = new StringBuilder();
         
@@ -185,7 +185,7 @@ public static class FirebirdMetadataReader
         });
     }
 
-    public static List<ProcedureMetadata> ReadProcedures(ISqlExecutor executor)
+    public List<ProcedureMetadata> ReadProcedures(ISqlExecutor executor)
     {
         var sql = new StringBuilder();
         
@@ -213,7 +213,7 @@ public static class FirebirdMetadataReader
         });
     }
 
-    private static string? BuildFullProcedureDefinition(ISqlExecutor executor, string procedureName, string? body)
+    private string? BuildFullProcedureDefinition(ISqlExecutor executor, string procedureName, string? body)
     {
         if (string.IsNullOrWhiteSpace(body))
         {
@@ -258,7 +258,7 @@ public static class FirebirdMetadataReader
         return sb.ToString();
     }
 
-    private static List<(string Name, string DataType)> ReadProcedureParameters(
+    private List<(string Name, string DataType)> ReadProcedureParameters(
         ISqlExecutor executor,
         string procedureName,
         bool isInput)
@@ -318,7 +318,7 @@ public static class FirebirdMetadataReader
         });
     }
 
-    private static int? CalculateCharacterLength(FirebirdFieldType fieldType, int? fieldLength, int? characterSetId)
+    private int? CalculateCharacterLength(FirebirdFieldType fieldType, int? fieldLength, int? characterSetId)
     {
         if (fieldType is FirebirdFieldType.Char or FirebirdFieldType.VarChar)
         {
@@ -353,7 +353,7 @@ public static class FirebirdMetadataReader
         return null;
     }
 
-    private static int? CalculateAbsoluteScale(int? fieldScale)
+    private int? CalculateAbsoluteScale(int? fieldScale)
     {
         if (fieldScale is < 0)
         {
@@ -363,7 +363,7 @@ public static class FirebirdMetadataReader
         return null;
     }
 
-    private static bool IsFieldNullable(object nullFlagValue)
+    private bool IsFieldNullable(object nullFlagValue)
     {
         if (nullFlagValue == DBNull.Value)
         {
@@ -373,7 +373,7 @@ public static class FirebirdMetadataReader
         return Convert.ToInt32(nullFlagValue) == 0;
     }
 
-    private static string? GetTrimmedStringOrNull(object value)
+    private string? GetTrimmedStringOrNull(object value)
     {
         if (value == DBNull.Value)
         {
@@ -383,7 +383,7 @@ public static class FirebirdMetadataReader
         return value.ToString()!.Trim();
     }
 
-    private static string MapFirebirdTypeToString(
+    private string MapFirebirdTypeToString(
         FirebirdFieldType fieldType,
         int? fieldSubType,
         int? fieldPrecision,
@@ -425,7 +425,7 @@ public static class FirebirdMetadataReader
         };
     }
 
-    private static string BuildNumericType(string baseType, string decimalType, bool hasScale, int precision, int scale)
+    private string BuildNumericType(string baseType, string decimalType, bool hasScale, int precision, int scale)
     {
         if (hasScale)
         {
@@ -442,7 +442,7 @@ public static class FirebirdMetadataReader
         return baseType;
     }
 
-    private static string BuildCharType(string baseType, int? length)
+    private string BuildCharType(string baseType, int? length)
     {
         if (length.HasValue)
         {
@@ -459,7 +459,7 @@ public static class FirebirdMetadataReader
         return baseType;
     }
 
-    private static string BuildBlobType(int? subType)
+    private string BuildBlobType(int? subType)
     {
         if (subType == (int)FirebirdBlobSubType.Text)
         {

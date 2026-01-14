@@ -8,13 +8,15 @@ using DbMetaTool.Utilities;
 
 namespace DbMetaTool.Services.Build;
 
-public static class DatabaseBuildService
+public class DatabaseBuildService(
+    IDatabaseCreator databaseCreator,
+    IScriptLoader scriptLoader) : IDatabaseBuildService
 {
-    public static BuildResult BuildDatabase(string databaseFilePath, string scriptsDirectory)
+    public BuildResult BuildDatabase(string databaseFilePath, string scriptsDirectory)
     {
         CreateEmptyDatabase(databaseFilePath);
 
-        var scripts = ScriptLoader.LoadScriptsInOrder(scriptsDirectory);
+        var scripts = scriptLoader.LoadScriptsInOrder(scriptsDirectory);
         
         if (scripts.Count == 0)
         {
@@ -43,9 +45,9 @@ public static class DatabaseBuildService
             ProcedureScripts: scripts.Count(s => s.Type == ScriptType.Procedure));
     }
 
-    private static void CreateEmptyDatabase(string databaseFilePath)
+    private void CreateEmptyDatabase(string databaseFilePath)
     {
-        FirebirdDatabaseCreator.CreateDatabase(databaseFilePath);
+        databaseCreator.CreateDatabase(databaseFilePath);
         
         Console.WriteLine("✓ Utworzono pustą bazę danych");
     }
@@ -59,7 +61,7 @@ public static class DatabaseBuildService
         Console.WriteLine();
     }
 
-    private static void ExecuteScripts(
+    private void ExecuteScripts(
         ISqlExecutor sqlExecutor,
         List<ScriptFile> scripts)
     {
@@ -69,7 +71,7 @@ public static class DatabaseBuildService
         {
             Console.Write($"Wykonywanie: {script.Type}/{script.FileName}... ");
 
-            var sql = ScriptLoader.ReadScriptContent(script);
+            var sql = scriptLoader.ReadScriptContent(script);
             
             var statements = SqlScriptParser.ParseScript(sql)
                 .Where(s => !string.IsNullOrWhiteSpace(s))

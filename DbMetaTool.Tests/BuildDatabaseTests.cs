@@ -1,4 +1,4 @@
-using DbMetaTool.Commands.BuildDatabase;
+using DbMetaTool.Features.Commands.BuildDatabase;
 using DbMetaTool.Models;
 using DbMetaTool.Services.Firebird;
 using DbMetaTool.Services.SqlScripts;

@@ -2,9 +2,9 @@ using DbMetaTool.Models.results;
 
 namespace DbMetaTool.Services.Build;
 
-public static class BuildReportGenerator
+public class BuildReportGenerator : IBuildReportGenerator
 {
-    public static void DisplayReport(BuildResult result)
+    public void DisplayReport(BuildResult result)
     {
         Console.WriteLine();
         Console.WriteLine("=== Podsumowanie ===");

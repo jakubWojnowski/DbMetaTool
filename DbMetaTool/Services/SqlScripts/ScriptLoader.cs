@@ -2,9 +2,9 @@ using DbMetaTool.Models;
 
 namespace DbMetaTool.Services.SqlScripts;
 
-public static class ScriptLoader
+public class ScriptLoader : IScriptLoader
 {
-    public static List<ScriptFile> LoadScriptsInOrder(string scriptsDirectory)
+    public List<ScriptFile> LoadScriptsInOrder(string scriptsDirectory)
     {
         if (string.IsNullOrWhiteSpace(scriptsDirectory))
             throw new ArgumentException("Scripts directory cannot be empty", nameof(scriptsDirectory));
@@ -23,7 +23,7 @@ public static class ScriptLoader
         return scripts;
     }
 
-    private static void LoadScriptsOfType(
+    private void LoadScriptsOfType(
         List<ScriptFile> scripts, 
         string baseDirectory, 
         string subdirectory, 
@@ -48,7 +48,7 @@ public static class ScriptLoader
         }
     }
 
-    public static string ReadScriptContent(ScriptFile script)
+    public string ReadScriptContent(ScriptFile script)
     {
         if (script == null)
             throw new ArgumentNullException(nameof(script));

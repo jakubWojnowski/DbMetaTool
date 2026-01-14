@@ -1,5 +1,6 @@
-﻿using DbMetaTool.Models;
+using DbMetaTool.Models;
 using DbMetaTool.Services.Firebird;
+using DbMetaTool.Services.SqlScripts;
 using DbMetaTool.Services.Update;
 using DbMetaTool.Tests.TestHelpers;
 using NSubstitute;
@@ -10,6 +11,7 @@ namespace DbMetaTool.Tests;
 public class DatabaseUpdateServiceTests
 {
     private ISqlExecutor _mockExecutor = null!;
+    private IScriptLoader _scriptLoader = null!;
     private DatabaseUpdateService _service = null!;
     private SqlScriptHelper _scriptHelper = null!;
 
@@ -17,9 +19,10 @@ public class DatabaseUpdateServiceTests
     public void SetUp()
     {
         _mockExecutor = Substitute.For<ISqlExecutor>();
+        _scriptLoader = new ScriptLoader();
         _scriptHelper = new SqlScriptHelper();
 
-        _service = new DatabaseUpdateService(_mockExecutor);
+        _service = new DatabaseUpdateService(_mockExecutor, _scriptLoader);
     }
 
     [TearDown]

@@ -5,9 +5,10 @@ using DbMetaTool.Services.Metadata;
 
 namespace DbMetaTool.Services.Export;
 
-public static class MetadataExportService
+public class MetadataExportService(
+    IMetadataReader metadataReader) : IMetadataExportService
 {
-    public static ExportResult ExportAll(ISqlExecutor executor, string outputDirectory)
+    public ExportResult ExportAll(ISqlExecutor executor, string outputDirectory)
     {
         if (executor == null)
         {
@@ -66,27 +67,27 @@ public static class MetadataExportService
         Directory.CreateDirectory(proceduresDir);
     }
 
-    private static List<DomainMetadata> ReadDomains(ISqlExecutor executor)
+    private List<DomainMetadata> ReadDomains(ISqlExecutor executor)
     {
-        var domains = FirebirdMetadataReader.ReadDomains(executor);
+        var domains = metadataReader.ReadDomains(executor);
         
         Console.WriteLine($"✓ Znaleziono {domains.Count} domen");
         
         return domains;
     }
 
-    private static List<TableMetadata> ReadTables(ISqlExecutor executor)
+    private List<TableMetadata> ReadTables(ISqlExecutor executor)
     {
-        var tables = FirebirdMetadataReader.ReadTables(executor);
+        var tables = metadataReader.ReadTables(executor);
         
         Console.WriteLine($"✓ Znaleziono {tables.Count} tabel");
         
         return tables;
     }
 
-    private static List<ProcedureMetadata> ReadProcedures(ISqlExecutor executor)
+    private List<ProcedureMetadata> ReadProcedures(ISqlExecutor executor)
     {
-        var procedures = FirebirdMetadataReader.ReadProcedures(executor);
+        var procedures = metadataReader.ReadProcedures(executor);
         
         Console.WriteLine($"✓ Znaleziono {procedures.Count} procedur");
         

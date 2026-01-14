@@ -2,9 +2,9 @@ using DbMetaTool.Models;
 
 namespace DbMetaTool.Services.Update;
 
-public static class UpdateReportGenerator
+public class UpdateReportGenerator : IUpdateReportGenerator
 {
-    public static void DisplayReport(List<DatabaseChange> changes)
+    public void DisplayReport(List<DatabaseChange> changes)
     {
         Console.WriteLine("=== Raport zmian ===");
         Console.WriteLine();
